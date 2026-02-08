@@ -11,7 +11,7 @@
       <el-table :data="historyList" stripe style="width: 100%" v-loading="loading">
         <el-table-column prop="appointmentTime" label="预约时间" width="180" />
         <el-table-column prop="carModel" label="车型" width="150" />
-        <el-table-column prop="serviceType" label="服务项目" width="150" />
+        <el-table-column prop="serviceType" label="服务项目" width="200" />
 
         <el-table-column label="状态" width="120">
           <template #default="scope">
@@ -25,7 +25,7 @@
 
         <el-table-column prop="cancelReason" label="取消原因" show-overflow-tooltip />
 
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="180">
           <template #default="scope">
             <el-button
               v-if="scope.row.status === '待确认'"
@@ -33,6 +33,13 @@
               size="small"
               @click="openCancelDialog(scope.row.id)"
             >取消</el-button>
+
+            <el-button
+              v-if="scope.row.status === '进行中' || scope.row.status === '服务中'"
+              type="warning"
+              size="small"
+              @click="viewFaultDetail(scope.row.id)"
+            >查看检查报告</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -60,22 +67,73 @@
         </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="faultDialogVisible" title="技师检查报告" width="550px">
+      <div v-if="currentFault" v-loading="loadingFault">
+        <el-alert
+          :title="currentFault.urgencyLevel === 2 ? '发现紧急安全隐患' : '发现建议维修项'"
+          :type="currentFault.urgencyLevel === 2 ? 'error' : 'warning'"
+          show-icon :closable="false"
+        />
+
+        <div style="margin-top: 20px;">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="建议维修项目">{{ currentFault.itemName }}</el-descriptions-item>
+            <el-descriptions-item label="技师问题描述">{{ currentFault.workerRemark }}</el-descriptions-item>
+            <el-descriptions-item label="当前状态">
+              <el-tag :type="currentFault.status === '已同意' ? 'success' : 'info'">
+                {{ currentFault.status }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <p style="margin-bottom: 10px; font-weight: bold;">现场照片记录：</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <el-image
+              v-for="(url, index) in faultImages"
+              :key="index"
+              :src="url"
+              :preview-src-list="faultImages"
+              style="width: 130px; height: 130px; border-radius: 8px; border: 1px solid #eee;"
+              fit="cover"
+            />
+          </div>
+          <p v-if="faultImages.length === 0" style="color: #999; font-size: 13px;">技师未上传照片</p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="faultDialogVisible = false">关闭</el-button>
+        <el-button
+          v-if="currentFault?.status === '待确认'"
+          type="primary"
+          @click="handleAgree(currentFault.id)"
+        >同意维修并更新订单</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus' // 移除 ElMessageBox，改用 Dialog
+import { ElMessage } from 'element-plus'
 
 const historyList = ref([])
 const loading = ref(false)
 
-// 【新增】弹窗相关变量
+// 取消预约相关变量
 const cancelDialogVisible = ref(false)
 const cancelReason = ref('')
 const currentCancelId = ref(null)
 const submitting = ref(false)
+
+// 【新增】故障报告相关变量
+const faultDialogVisible = ref(false)
+const loadingFault = ref(false)
+const currentFault = ref(null)
+const faultImages = ref([])
 
 // 1. 获取预约列表
 const fetchHistory = async () => {
@@ -106,26 +164,73 @@ const getStatusTag = (status) => {
     '待确认': 'info',
     '已确认': 'primary',
     '进行中': 'warning',
+    '服务中': 'warning',
     '已完成': 'success',
     '已取消': 'danger'
   }
   return tagMap[status] || ''
 }
 
-// 【修改】点击列表中的取消按钮，只负责打开弹窗
+// --- 【新增】故障报告逻辑 ---
+
+/**
+ * 获取特定预约单的故障隐患详情
+ */
+const viewFaultDetail = async (appointmentId) => {
+  loadingFault.value = true
+  try {
+    // 调用后端接口：此处路径需与 Controller 定义一致
+    const res = await axios.get(`http://localhost:8080/api/faults/findByAppointment/${appointmentId}`)
+    if (res.data.success) {
+      currentFault.value = res.data.data
+      // 解析后端用逗号拼接的图片字符串
+      if (currentFault.value && currentFault.value.faultImages) {
+        faultImages.value = currentFault.value.faultImages.split(',')
+      } else {
+        faultImages.value = []
+      }
+      faultDialogVisible.value = true
+    } else {
+      ElMessage.info('技师正在检查车辆，暂无异常报告')
+    }
+  } catch (error) {
+    ElMessage.error('获取检查报告失败')
+  } finally {
+    loadingFault.value = false
+  }
+}
+
+/**
+ * 顾客同意维修逻辑
+ */
+const handleAgree = async (faultId) => {
+  try {
+    // 调用后端处理接口，对应 Service 中的 handleCustomerResponse 方法
+    const res = await axios.post(`http://localhost:8080/api/faults/handle?faultId=${faultId}&isAgreed=true`)
+    if (res.data.success) {
+      ElMessage.success('已确认维修项目，订单内容和价格已更新')
+      faultDialogVisible.value = false
+      fetchHistory() // 刷新列表以显示更新后的服务内容或价格
+    } else {
+      ElMessage.error(res.data.message || '操作失败')
+    }
+  } catch (err) {
+    ElMessage.error('网络请求失败')
+  }
+}
+
+// 原有取消逻辑
 const openCancelDialog = (id) => {
   currentCancelId.value = id
-  cancelReason.value = '' // 清空之前的输入
+  cancelReason.value = ''
   cancelDialogVisible.value = true
 }
 
-// 【新增】重置表单（关闭弹窗时触发）
 const resetCancelForm = () => {
   cancelReason.value = ''
   currentCancelId.value = null
 }
 
-// 【新增】真正提交取消请求
 const submitCancel = async () => {
   if (!cancelReason.value.trim()) {
     ElMessage.warning('请输入取消原因')
@@ -136,16 +241,14 @@ const submitCancel = async () => {
   try {
     const payload = {
       id: currentCancelId.value,
-      status: 4, // 对应后端的 "已取消"
-      cancelReason: cancelReason.value // 把原因传给后端
+      status: 4,
+      cancelReason: cancelReason.value
     }
-
     const res = await axios.put('http://localhost:8080/api/appointment/updateStatus', payload)
-
     if (res.data.success || res.data.code === 200) {
       ElMessage.success('已取消预约')
-      cancelDialogVisible.value = false // 关闭弹窗
-      fetchHistory() // 刷新列表
+      cancelDialogVisible.value = false
+      fetchHistory()
     } else {
       ElMessage.error(res.data.message || '取消失败')
     }
