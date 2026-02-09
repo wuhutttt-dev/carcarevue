@@ -14,7 +14,7 @@
       <el-form-item label="服务项目">
         <el-select
           v-model="form.serviceType"
-          placeholder="请选择项目（支持多选）"
+          placeholder="请选择项目（已为您匹配适用项目）"
           style="width: 100%"
           v-loading="loadingServices"
           multiple
@@ -22,18 +22,16 @@
           collapse-tags-tooltip
         >
           <el-option
-            v-for="item in serviceOptions"
+            v-for="item in filteredServiceOptions"
             :key="item.id"
             :label="item.name"
             :value="item.name"
           >
             <span class="option-name">{{ item.name }}</span>
+            <el-tag size="small" effect="plain" style="margin-left: 8px">{{ item.vehicleType }}</el-tag>
             <span class="option-price">¥{{ item.price }}</span>
           </el-option>
         </el-select>
-        <div v-if="discountTip" class="discount-hint">
-          <el-icon><MagicStick /></el-icon> {{ discountTip }}
-        </div>
       </el-form-item>
 
       <el-form-item label="预约时间">
@@ -118,12 +116,29 @@ const router = useRouter()
 const loading = ref(false)
 const loadingServices = ref(false)
 const serviceOptions = ref([])
+const userVehicleType = ref('') // [新增] 用于存储当前用户的车型
 
 const form = reactive({
   carModel: '',
   serviceType: [],
   appointmentTime: '',
   remark: ''
+})
+
+// --- [核心功能新增] 计算过滤后的服务列表 ---
+// 仅添加此段逻辑，不改动原有 billing 等计算属性
+const filteredServiceOptions = computed(() => {
+  const userType = (userVehicleType.value || '').trim()
+
+  // 如果没有识别到车型，为了兼容性显示全量数据
+  if (!userType) return serviceOptions.value
+
+  return serviceOptions.value.filter(item => {
+    // 根据您数据库截图，字段名为 vehicleType
+    const itemType = (item.vehicleType || '').trim()
+    // 实现逻辑：匹配用户车型 OR 通用项目 OR 字段为空
+    return itemType === userType || itemType === '通用' || itemType === ''
+  })
 })
 
 // --- 实时计价与复合折扣逻辑 ---
@@ -297,6 +312,7 @@ onMounted(() => {
   }
 
   const user = JSON.parse(userStr)
+  userVehicleType.value = user.vehicleType || ''
   const isIncomplete = !user.realName || !user.phone || !user.carModel
 
   if (isIncomplete) {

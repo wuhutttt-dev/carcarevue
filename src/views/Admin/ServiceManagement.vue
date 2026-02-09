@@ -39,7 +39,16 @@
       <el-table-column prop="name" label="服务名称" width="150" />
       <el-table-column prop="description" label="项目内容描述" min-width="200" show-overflow-tooltip />
 
-      <el-table-column prop="duration" label="预计耗时" width="120" align="center">
+      <el-table-column label="适用车型" width="120" align="center">
+        <template #default="scope">
+          <el-tag v-if="scope.row.vehicleType === '通用'" type="info">通用</el-tag>
+          <el-tag v-else-if="scope.row.vehicleType === '燃油车'" type="warning">燃油车</el-tag>
+          <el-tag v-else-if="scope.row.vehicleType === '电车'" type="success">电车</el-tag>
+          <el-tag v-else type="info">{{ scope.row.vehicleType || '未分类' }}</el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column prop="duration" label="预计耗时" width="100" align="center">
         <template #default="scope">
           <el-tag type="info" effect="plain">{{ scope.row.duration || 0 }} 分钟</el-tag>
         </template>
@@ -53,13 +62,13 @@
 
       <el-table-column label="管理操作" width="180" align="center">
         <template #default="scope">
-          <el-button type="primary" size="small" @click="handleEdit(scope.row)">修改</el-button>
+          <el-button type="primary" size="small" @click="handleEdit(scope.row)">修改信息</el-button>
           <el-button type="danger" size="small" @click="confirmDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editForm.id ? '编辑服务' : '新增服务'" width="500px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="editForm.id ? '编辑服务' : '新增服务'" width="550px" destroy-on-close>
       <el-form :model="editForm" label-width="100px">
         <el-form-item label="项目名称">
           <el-input v-model="editForm.name" placeholder="请输入服务名称" />
@@ -69,6 +78,14 @@
           <el-select v-model="editForm.category" placeholder="请选择分类" style="width: 100%">
             <el-option label="保养项目" value="maintenance" />
             <el-option label="维修项目" value="repair" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="适用车型">
+          <el-select v-model="editForm.vehicleType" placeholder="请选择适用车型" style="width: 100%">
+            <el-option label="通用项目 (全系适用)" value="通用" />
+            <el-option label="燃油车专用 (ICE)" value="燃油车" />
+            <el-option label="电动车专用 (EV)" value="电车" />
           </el-select>
         </el-form-item>
 
@@ -118,9 +135,9 @@ const serviceList = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
-const activeCategory = ref('maintenance') // 默认显示保养
+const activeCategory = ref('maintenance')
 
-// 表单初始状态
+// 表单初始状态，已增加 vehicleType 默认值
 const initialForm = {
   id: null,
   name: '',
@@ -128,32 +145,29 @@ const initialForm = {
   description: '',
   duration: 30,
   imageUrl: '',
-  category: 'maintenance'
+  category: 'maintenance',
+  vehicleType: '通用'
 }
 const editForm = ref({ ...initialForm })
 
-// 1. 获取对应分类的服务列表
 const fetchServices = async () => {
   loading.value = true
   try {
-    // 调用后端按分类查询的新接口
     const res = await axios.get(`http://localhost:8080/api/service-item/listByCategory?category=${activeCategory.value}`)
     if (res.data.success) {
       serviceList.value = res.data.data
     }
   } catch (error) {
-    ElMessage.error('获取列表失败，请检查后端接口')
+    ElMessage.error('获取列表失败')
   } finally {
     loading.value = false
   }
 }
 
-// Tab 切换事件
 const handleTabChange = () => {
   fetchServices()
 }
 
-// 2. 新增与编辑逻辑
 const handleAdd = () => {
   editForm.value = { ...initialForm, category: activeCategory.value }
   dialogVisible.value = true
@@ -164,7 +178,6 @@ const handleEdit = (row) => {
   dialogVisible.value = true
 }
 
-// 3. 上传图片成功
 const handleUploadSuccess = (response) => {
   if (response.success) {
     editForm.value.imageUrl = response.data
@@ -180,7 +193,6 @@ const beforeUpload = (file) => {
   return isImg
 }
 
-// 4. 提交保存
 const submitUpdate = async () => {
   submitting.value = true
   try {
@@ -195,15 +207,18 @@ const submitUpdate = async () => {
   }
 }
 
-// 5. 删除逻辑
 const confirmDelete = (row) => {
   ElMessageBox.confirm(`确定要删除“${row.name}”吗？`, '警告', { type: 'warning' }).then(async () => {
-    const res = await axios.delete(`http://localhost:8080/api/service-item/${row.id}`)
-    if (res.data.success) {
-      ElMessage.success('已删除')
-      fetchServices()
+    try {
+      const res = await axios.delete(`http://localhost:8080/api/service-item/delete/${row.id}`)
+      if (res.data.success) {
+        ElMessage.success('已删除')
+        fetchServices()
+      }
+    } catch (error) {
+      ElMessage.error('删除失败')
     }
-  })
+  }).catch(() => {})
 }
 
 onMounted(fetchServices)
@@ -211,12 +226,13 @@ onMounted(fetchServices)
 
 <style scoped>
 .header-box { display: flex; justify-content: space-between; align-items: center; }
+.title-area { display: flex; align-items: center; gap: 8px; }
+.title { font-weight: bold; font-size: 16px; color: #303133; }
 .action-area { display: flex; gap: 10px; }
 .category-tabs { margin-top: 10px; }
 .price-tag { color: #f56c6c; font-weight: bold; }
 .form-tip { font-size: 12px; color: #909399; margin-top: 4px; }
 
-/* 上传预览样式 */
 .service-uploader {
   border: 1px dashed #d9d9d9;
   border-radius: 6px;
@@ -226,7 +242,9 @@ onMounted(fetchServices)
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  cursor: pointer;
 }
+.service-uploader:hover { border-color: #409eff; }
 .service-img-preview { width: 100%; height: 100%; object-fit: cover; }
 .service-uploader-icon { font-size: 28px; color: #8c939d; }
 </style>
