@@ -23,20 +23,17 @@
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="realName" label="姓名" width="120" />
         <el-table-column prop="gender" label="性别" width="80" align="center" />
-
-        <el-table-column prop="jobTitle" label="职位" width="150">
-          <template #default="scope">
-            <el-tag effect="plain">{{ scope.row.jobTitle }}</el-tag>
-          </template>
-        </el-table-column>
-
         <el-table-column prop="phone" label="手机号" width="150" />
         <el-table-column prop="email" label="邮箱" min-width="180" />
 
         <el-table-column label="管理操作" width="180" fixed="right" align="center">
-          <template #default="{ row }">
-            <el-button size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDel(row.id)">删除</el-button>
+          <template #default="scope">
+            <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="handleDel(scope.row.id)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -44,44 +41,38 @@
 
     <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? '编辑员工' : '新增员工'"
+      :title="form.id ? '修改员工信息' : '添加新员工'"
       width="500px"
-      destroy-on-close
     >
-      <el-form :model="form" label-width="100px" style="padding-right: 20px">
-        <el-form-item label="账号">
-          <el-input v-model="form.username" :disabled="!!form.id" placeholder="登录账号" />
+      <el-form :model="form" label-width="100px">
+        <el-form-item label="姓名">
+          <el-input v-model="form.realName" placeholder="请输入真实姓名" />
         </el-form-item>
-        <el-form-item label="密码" v-if="!form.id">
-          <el-input v-model="form.password" type="password" show-password placeholder="初始密码" />
-        </el-form-item>
-        <el-form-item label="真实姓名">
-          <el-input v-model="form.realName" placeholder="员工真实姓名" />
-        </el-form-item>
-        <el-form-item label="职位">
-          <el-select v-model="form.jobTitle" placeholder="请选择职位" style="width: 100%">
-            <el-option label="维修技师" value="维修技师" />
-            <el-option label="前台接待" value="前台接待" />
-            <el-option label="洗车工" value="洗车工" />
-            <el-option label="店长" value="店长" />
-          </el-select>
-        </el-form-item>
+
         <el-form-item label="性别">
           <el-radio-group v-model="form.gender">
-            <el-radio label="男">男</el-radio>
-            <el-radio label="女">女</el-radio>
+            <el-radio value="男">男</el-radio>
+            <el-radio value="女">女</el-radio>
           </el-radio-group>
         </el-form-item>
+
         <el-form-item label="手机号">
-          <el-input v-model="form.phone" placeholder="联系电话" />
+          <el-input v-model="form.phone" placeholder="请输入联系电话" />
         </el-form-item>
+
         <el-form-item label="邮箱">
-          <el-input v-model="form.email" placeholder="电子邮箱" />
+          <el-input v-model="form.email" placeholder="请输入电子邮箱" />
+        </el-form-item>
+
+        <el-form-item label="初始密码" v-if="!form.id">
+          <el-input v-model="form.password" placeholder="为空则默认为 123456" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">确定保存</el-button>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitForm">确 定</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
@@ -90,14 +81,24 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Avatar } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
-const tableData = ref([])
 const loading = ref(false)
+const tableData = ref([])
 const dialogVisible = ref(false)
-const form = ref({ gender: '男' })
 
+// 响应式表单对象，已删除 jobTitle 和 specialization
+const form = ref({
+  id: null,
+  realName: '',
+  gender: '男',
+  phone: '',
+  email: '',
+  password: ''
+})
+
+// 加载数据
 const loadData = async () => {
   loading.value = true
   try {
@@ -106,22 +107,25 @@ const loadData = async () => {
       tableData.value = res.data.data
     }
   } catch (error) {
-    ElMessage.error('获取员工列表失败')
+    ElMessage.error('获取数据失败')
   } finally {
     loading.value = false
   }
 }
 
+// 打开新增
 const handleAdd = () => {
-  form.value = { gender: '男', jobTitle: '维修技师' }
+  form.value = { id: null, realName: '', gender: '男', phone: '', email: '', password: '' }
   dialogVisible.value = true
 }
 
+// 打开编辑
 const handleEdit = (row) => {
   form.value = { ...row }
   dialogVisible.value = true
 }
 
+// 提交表单
 const submitForm = async () => {
   const api = form.value.id ? '/updateStaff' : '/addStaff'
   try {
@@ -138,8 +142,11 @@ const submitForm = async () => {
   }
 }
 
+// 删除操作
 const handleDel = (id) => {
   ElMessageBox.confirm('确定要永久删除该员工档案吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
     type: 'warning'
   }).then(async () => {
     try {
@@ -159,36 +166,23 @@ onMounted(loadData)
 
 <style scoped>
 .staff-manage {
-  padding: 0; /* 如果 AdminLayout 有内边距，这里可以设为 0 */
+  padding: 0;
 }
-
-.staff-card {
-  border-radius: 8px;
-  border: none;
-}
-
-/* 统一 Header 布局方案 */
 .header-box {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-
-/* 统一图标与文字的紧凑排列 */
 .title-area {
   display: flex;
   align-items: center;
-  gap: 8px; /* 解决图标离字太远的问题 */
+  gap: 8px;
 }
-
 .title {
   font-weight: bold;
   font-size: 16px;
-  color: #303133;
 }
-
-/* 保持表格上方间距一致 */
-:deep(.el-card__body) {
-  padding: 20px;
+.staff-card {
+  border-radius: 8px;
 }
 </style>

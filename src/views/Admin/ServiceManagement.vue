@@ -4,13 +4,21 @@
       <div class="header-box">
         <div class="title-area">
           <el-icon><Tools /></el-icon>
-          <span class="title">服务项目与价格维护</span>
+          <span class="title">服务项目维护</span>
         </div>
-        <el-button type="primary" icon="Refresh" @click="fetchServices" :loading="loading">刷新数据</el-button>
+        <div class="action-area">
+          <el-button type="success" icon="Plus" @click="handleAdd">新增项目</el-button>
+          <el-button type="primary" icon="Refresh" @click="fetchServices" :loading="loading">刷新数据</el-button>
+        </div>
       </div>
     </template>
 
-    <el-table :data="serviceList" border stripe v-loading="loading">
+    <el-tabs v-model="activeCategory" @tab-change="handleTabChange" class="category-tabs">
+      <el-tab-pane label="保养项目管理" name="maintenance" />
+      <el-tab-pane label="维修项目管理" name="repair" />
+    </el-tabs>
+
+    <el-table :data="serviceList" border stripe v-loading="loading" style="margin-top: 15px">
       <el-table-column type="index" label="序号" width="60" align="center" />
 
       <el-table-column label="项目图片" width="100" align="center">
@@ -29,7 +37,7 @@
       </el-table-column>
 
       <el-table-column prop="name" label="服务名称" width="150" />
-      <el-table-column prop="description" label="项目内容描述" min-width="200" />
+      <el-table-column prop="description" label="项目内容描述" min-width="200" show-overflow-tooltip />
 
       <el-table-column prop="duration" label="预计耗时" width="120" align="center">
         <template #default="scope">
@@ -43,17 +51,25 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="管理操作" width="120" align="center">
+      <el-table-column label="管理操作" width="180" align="center">
         <template #default="scope">
-          <el-button type="primary" size="small" @click="handleEdit(scope.row)">修改信息</el-button>
+          <el-button type="primary" size="small" @click="handleEdit(scope.row)">修改</el-button>
+          <el-button type="danger" size="small" @click="confirmDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" title="编辑服务项目" width="500px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="editForm.id ? '编辑服务' : '新增服务'" width="500px" destroy-on-close>
       <el-form :model="editForm" label-width="100px">
         <el-form-item label="项目名称">
           <el-input v-model="editForm.name" placeholder="请输入服务名称" />
+        </el-form-item>
+
+        <el-form-item label="所属分类">
+          <el-select v-model="editForm.category" placeholder="请选择分类" style="width: 100%">
+            <el-option label="保养项目" value="maintenance" />
+            <el-option label="维修项目" value="repair" />
+          </el-select>
         </el-form-item>
 
         <el-form-item label="项目图片">
@@ -68,29 +84,16 @@
             <img v-if="editForm.imageUrl" :src="editForm.imageUrl" class="service-img-preview" />
             <el-icon v-else class="service-uploader-icon"><Plus /></el-icon>
           </el-upload>
-          <div class="form-tip">点击预览图更换图片，文件将存入指定本地目录</div>
+          <div class="form-tip">点击预览图更换图片</div>
         </el-form-item>
 
         <el-form-item label="服务时长">
-          <el-input-number
-            v-model="editForm.duration"
-            :min="1"
-            :step="15"
-            controls-position="right"
-            style="width: 100%"
-          />
+          <el-input-number v-model="editForm.duration" :min="1" controls-position="right" style="width: 100%" />
           <div class="form-tip">单位：分钟</div>
         </el-form-item>
 
         <el-form-item label="服务单价">
-          <el-input-number
-            v-model="editForm.price"
-            :precision="2"
-            :step="10"
-            :min="0"
-            controls-position="right"
-            style="width: 100%"
-          />
+          <el-input-number v-model="editForm.price" :precision="2" :min="0" controls-position="right" style="width: 100%" />
         </el-form-item>
 
         <el-form-item label="描述详情">
@@ -109,86 +112,98 @@
 import { ref, onMounted } from 'vue'
 import { Tools, Refresh, Plus, Picture } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const serviceList = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const activeCategory = ref('maintenance') // 默认显示保养
 
-// 编辑表单数据
-const editForm = ref({
+// 表单初始状态
+const initialForm = {
   id: null,
   name: '',
   price: 0,
   description: '',
-  duration: 0,
-  imageUrl: '' // 绑定数据库中的图片路径
-})
+  duration: 30,
+  imageUrl: '',
+  category: 'maintenance'
+}
+const editForm = ref({ ...initialForm })
 
-// 1. 获取服务列表
+// 1. 获取对应分类的服务列表
 const fetchServices = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/service-item/list')
+    // 调用后端按分类查询的新接口
+    const res = await axios.get(`http://localhost:8080/api/service-item/listByCategory?category=${activeCategory.value}`)
     if (res.data.success) {
       serviceList.value = res.data.data
     }
   } catch (error) {
-    ElMessage.error('获取列表失败')
+    ElMessage.error('获取列表失败，请检查后端接口')
   } finally {
     loading.value = false
   }
 }
 
-// 2. 打开编辑弹窗
-const handleEdit = (row) => {
-  editForm.value = { ...row } // 将当前行数据拷贝到表单
+// Tab 切换事件
+const handleTabChange = () => {
+  fetchServices()
+}
+
+// 2. 新增与编辑逻辑
+const handleAdd = () => {
+  editForm.value = { ...initialForm, category: activeCategory.value }
   dialogVisible.value = true
 }
 
-// 3. 上传成功逻辑：接收后端返回的相对路径
+const handleEdit = (row) => {
+  editForm.value = { ...row }
+  dialogVisible.value = true
+}
+
+// 3. 上传图片成功
 const handleUploadSuccess = (response) => {
-  if (response.success || response.code === 200) {
-    // 后端返回的是 webPath 字符串（如 /src/assets/ServiceItem_pic/xxx.jpg）
+  if (response.success) {
     editForm.value.imageUrl = response.data
-    ElMessage.success('图片上传成功，保存后同步到数据库')
+    ElMessage.success('图片上传成功')
   } else {
-    ElMessage.error(response.message || '图片上传失败')
+    ElMessage.error('上传失败')
   }
 }
 
-// 4. 上传前校验
-const beforeUpload = (rawFile) => {
-  const isImage = ['image/jpeg', 'image/png', 'image/jpg'].includes(rawFile.type)
-  if (!isImage) {
-    ElMessage.error('仅支持 JPG/PNG 格式图片')
-    return false
-  }
-  if (rawFile.size / 1024 / 1024 > 5) {
-    ElMessage.error('图片大小不能超过 5MB')
-    return false
-  }
-  return true
+const beforeUpload = (file) => {
+  const isImg = file.type.startsWith('image/')
+  if (!isImg) ElMessage.error('只能上传图片文件')
+  return isImg
 }
 
-// 5. 提交完整表单（包含新图片路径）到数据库
+// 4. 提交保存
 const submitUpdate = async () => {
   submitting.value = true
   try {
     const res = await axios.post('http://localhost:8080/api/service-item/update', editForm.value)
     if (res.data.success) {
-      ElMessage.success('信息更新成功')
+      ElMessage.success('保存成功')
       dialogVisible.value = false
-      fetchServices() // 刷新列表查看最新结果
-    } else {
-      ElMessage.error(res.data.message || '保存失败')
+      fetchServices()
     }
-  } catch (error) {
-    ElMessage.error('服务器响应错误')
   } finally {
     submitting.value = false
   }
+}
+
+// 5. 删除逻辑
+const confirmDelete = (row) => {
+  ElMessageBox.confirm(`确定要删除“${row.name}”吗？`, '警告', { type: 'warning' }).then(async () => {
+    const res = await axios.delete(`http://localhost:8080/api/service-item/${row.id}`)
+    if (res.data.success) {
+      ElMessage.success('已删除')
+      fetchServices()
+    }
+  })
 }
 
 onMounted(fetchServices)
@@ -196,43 +211,22 @@ onMounted(fetchServices)
 
 <style scoped>
 .header-box { display: flex; justify-content: space-between; align-items: center; }
-.title-area { display: flex; align-items: center; gap: 8px; }
-.title { font-weight: bold; font-size: 16px; }
-.price-tag { color: #f56c6c; font-weight: bold; font-size: 16px; }
+.action-area { display: flex; gap: 10px; }
+.category-tabs { margin-top: 10px; }
+.price-tag { color: #f56c6c; font-weight: bold; }
 .form-tip { font-size: 12px; color: #909399; margin-top: 4px; }
 
-/* 上传组件样式：固定大小预览 */
+/* 上传预览样式 */
 .service-uploader {
   border: 1px dashed #d9d9d9;
   border-radius: 6px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
   width: 178px;
   height: 120px;
-}
-.service-uploader:hover { border-color: #409eff; }
-.service-uploader-icon {
-  font-size: 28px;
-  color: #8c939d;
-  width: 178px;
-  height: 120px;
-  text-align: center;
-  line-height: 120px;
-}
-.service-img-preview {
-  width: 178px;
-  height: 120px;
-  display: block;
-  object-fit: cover;
-}
-.image-slot {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
-  height: 100%;
-  background: #f5f7fa;
-  color: #909399;
+  overflow: hidden;
 }
+.service-img-preview { width: 100%; height: 100%; object-fit: cover; }
+.service-uploader-icon { font-size: 28px; color: #8c939d; }
 </style>
