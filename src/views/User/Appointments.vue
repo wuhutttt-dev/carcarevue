@@ -126,7 +126,6 @@ const form = reactive({
 })
 
 // --- [核心功能新增] 计算过滤后的服务列表 ---
-// 仅添加此段逻辑，不改动原有 billing 等计算属性
 const filteredServiceOptions = computed(() => {
   const userType = (userVehicleType.value || '').trim()
 
@@ -143,30 +142,48 @@ const filteredServiceOptions = computed(() => {
 
 // --- 实时计价与复合折扣逻辑 ---
 const billing = computed(() => {
-  let carWrapPrice = 0
-  let extraServicesPrice = 0
+  // === 1. 定义变量 ===
+  let carWrapPrice = 0       // 车衣原价
+  let beautyServicesPrice = 0 // 美容/保养项目原价（原 extraServicesPrice）
+  let repairPrice = 0        // 维修项目原价（新增：完全不参与打折）
+
   let totalDuration = 0
   let hasCarWrap = false
+  let beautyCount = 0        // 参与打折的项目数量（原 extraCount）
 
+  // === 2. 遍历并分类 ===
   form.serviceType.forEach(name => {
     const item = serviceOptions.value.find(s => s.name === name)
     if (item) {
-      totalDuration += item.duration
-      if (name === '贴车衣') {
-        hasCarWrap = true
-        carWrapPrice = item.price
+      totalDuration += (item.duration || 0)
+
+      // 判断是否为维修项目 (根据你数据库的 category 字段值调整，如 'repair' 或 '维修')
+      if (item.category === 'repair' || item.category === '维修') {
+        // A. 维修项目：全额累加，不计数，不参与折扣
+        repairPrice += item.price
       } else {
-        extraServicesPrice += item.price
+        // B. 非维修项目（车衣或美容保养）
+        if (name === '贴车衣') {
+          hasCarWrap = true
+          carWrapPrice = item.price
+        } else {
+          beautyServicesPrice += item.price
+          beautyCount++ // 只有美容项目才计入“凑单数量”
+        }
       }
     }
   })
 
-  const extraCount = hasCarWrap ? form.serviceType.length - 1 : form.serviceType.length
-  let finalPrice = 0
-  let discountAmount = 0
+  // === 3. 计算折扣 (逻辑保持你原有的不变，只是变量名换了) ===
+  // 注意：这里的 extraCount 现在只代表“除车衣外的美容项目数量”，维修项目不充当分母
+  const extraCount = beautyCount
+
+  let discountedWrapPrice = carWrapPrice // 默认车衣实付
+  let discountedBeautyPrice = beautyServicesPrice // 默认美容实付
   let rateName = '无折扣'
 
   if (hasCarWrap) {
+    // --- 场景一：有车衣 ---
     let carWrapRate = 1
     let extraServiceRate = 1
 
@@ -188,23 +205,39 @@ const billing = computed(() => {
       rateName = '车衣92折+额外75折'
     }
 
-    finalPrice = (carWrapPrice * carWrapRate) + (extraServicesPrice * extraServiceRate)
-    discountAmount = (carWrapPrice + extraServicesPrice) - finalPrice
+    discountedWrapPrice = carWrapPrice * carWrapRate
+    discountedBeautyPrice = beautyServicesPrice * extraServiceRate
+
   } else {
+    // --- 场景二：无车衣 (纯美容/保养凑单) ---
     let commonRate = 1
     if (extraCount === 2) { commonRate = 0.95; rateName = '95折' }
     else if (extraCount === 3) { commonRate = 0.88; rateName = '88折' }
     else if (extraCount >= 4) { commonRate = 0.75; rateName = '75折' }
 
-    finalPrice = extraServicesPrice * commonRate
-    discountAmount = extraServicesPrice - finalPrice
+    discountedBeautyPrice = beautyServicesPrice * commonRate
+  }
+
+  // === 4. 汇总最终价格 ===
+  // 最终价 = 维修原价 + 打折后的车衣 + 打折后的美容
+  const finalPriceCalc = repairPrice + discountedWrapPrice + discountedBeautyPrice
+
+  // 原总价
+  const totalPriceCalc = repairPrice + carWrapPrice + beautyServicesPrice
+
+  // 优惠金额
+  const discountAmount = totalPriceCalc - finalPriceCalc
+
+  // 如果有维修项目且产生了折扣，提示语加个备注
+  if (repairPrice > 0 && discountAmount > 0) {
+    rateName += ' (维修不打折)'
   }
 
   return {
-    totalPrice: carWrapPrice + extraServicesPrice,
+    totalPrice: totalPriceCalc,
     totalDuration: totalDuration,
     discountAmount: Math.round(discountAmount * 100) / 100,
-    finalPrice: Math.round(finalPrice * 100) / 100,
+    finalPrice: Math.round(finalPriceCalc * 100) / 100,
     rateName: rateName
   }
 })
@@ -281,6 +314,7 @@ const submit = async () => {
       customerName: user.realName,
       customerPhone: user.phone,
       carLicense: user.carLicense,
+      vehicleType: userVehicleType.value,
       status: '待确认'
     }
     const res = await axios.post('http://localhost:8080/api/appointment/add', payload)
