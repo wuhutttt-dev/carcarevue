@@ -42,16 +42,10 @@
       </el-main>
     </el-container>
 
-    <el-dialog v-model="profileDialogVisible" title="个人信息维护" width="550px" destroy-on-close>
+    <el-dialog v-model="profileDialogVisible" title="个人信息维护" width="550px" @closed="stopCamera" destroy-on-close>
       <el-form :model="editForm" label-width="100px" style="padding: 0 20px">
         <el-form-item label="真实姓名">
           <el-input v-model="editForm.realName" placeholder="请输入真实姓名" />
-        </el-form-item>
-        <el-form-item label="性别">
-          <el-radio-group v-model="editForm.gender">
-            <el-radio label="男">男</el-radio>
-            <el-radio label="女">女</el-radio>
-          </el-radio-group>
         </el-form-item>
         <el-form-item label="手机号">
           <el-input v-model="editForm.phone" placeholder="请输入手机号" />
@@ -59,10 +53,31 @@
         <el-form-item label="邮箱">
           <el-input v-model="editForm.email" placeholder="请输入邮箱" />
         </el-form-item>
+
+        <el-form-item label="人脸识别">
+          <div v-if="cameraActive" class="camera-wrapper">
+            <video ref="videoPlayer" autoplay playsinline width="300" height="225" class="video-preview"></video>
+            <div class="camera-actions">
+              <el-button type="primary" size="small" @click="capturePhoto">拍摄照片</el-button>
+              <el-button size="small" @click="stopCamera">关闭</el-button>
+            </div>
+          </div>
+          <div v-else>
+            <el-button type="warning" plain @click="startCamera">
+              {{ editForm.faceId ? '重新录入人脸' : '开启摄像头录入' }}
+            </el-button>
+            <el-tag v-if="editForm.faceId" type="success" style="margin-left: 10px">已录入</el-tag>
+            <el-tag v-if="hasCaptured" type="warning" style="margin-left: 10px">已抓拍待保存</el-tag>
+          </div>
+        </el-form-item>
+
         <el-form-item label="头像链接">
           <el-input v-model="editForm.avatar" placeholder="图片 URL 地址" />
         </el-form-item>
       </el-form>
+
+      <canvas ref="canvasOutput" width="400" height="300" style="display: none;"></canvas>
+
       <template #footer>
         <el-button @click="profileDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="saveLoading" @click="handleSave">保存修改</el-button>
@@ -72,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -83,16 +98,23 @@ const router = useRouter()
 const profileDialogVisible = ref(false)
 const saveLoading = ref(false)
 
-// 当前登录的管理员原始数据
+// 摄像头相关变量
+const cameraActive = ref(false)
+const hasCaptured = ref(false)
+const videoPlayer = ref(null)
+const canvasOutput = ref(null)
+let mediaStream = null
+
 const adminData = ref({})
-// 弹窗编辑用的临时数据，防止未保存就直接修改了导航栏显示
 const editForm = ref({
   id: '',
   realName: '',
   gender: '男',
   phone: '',
   email: '',
-  avatar: ''
+  avatar: '',
+  faceId: '',    // 原有的 faceId
+  faceImage: ''  // 抓拍的 Base64 数据
 })
 
 const currentPageName = computed(() => {
@@ -105,21 +127,60 @@ onMounted(() => {
   if (user) adminData.value = user
 })
 
-// 打开弹窗并深拷贝数据
 const openProfile = () => {
   editForm.value = JSON.parse(JSON.stringify(adminData.value))
+  hasCaptured.value = false
   profileDialogVisible.value = true
 }
 
-// 保存修改到后端及本地缓存
+// --- 摄像头逻辑开始 ---
+const startCamera = async () => {
+  cameraActive.value = true
+  await nextTick()
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 400, height: 300 },
+      audio: false
+    })
+    if (videoPlayer.value) {
+      videoPlayer.value.srcObject = mediaStream
+    }
+  } catch (err) {
+    ElMessage.error('无法开启摄像头：' + err.message)
+    cameraActive.value = false
+  }
+}
+
+const stopCamera = () => {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(track => track.stop())
+    mediaStream = null
+  }
+  cameraActive.value = false
+}
+
+const capturePhoto = () => {
+  const context = canvasOutput.value.getContext('2d')
+  context.drawImage(videoPlayer.value, 0, 0, 400, 300)
+  // 获取 Base64 并暂存
+  editForm.value.faceImage = canvasOutput.value.toDataURL('image/png').split(',')[1]
+  hasCaptured.value = true
+  stopCamera()
+  ElMessage.success('人脸照片已抓取，点击“保存修改”后生效')
+}
+// --- 摄像头逻辑结束 ---
+
 const handleSave = async () => {
   saveLoading.value = true
   try {
-    // 注意：此处 URL 需对应你后端的更新接口，通常在 AdminController 中
     const res = await axios.post('http://localhost:8080/api/admin/update', editForm.value)
     if (res.data.success) {
       ElMessage.success('个人信息更新成功')
       adminData.value = { ...editForm.value }
+      // 后端应该返回更新后的 admin 对象，包含新的 faceId
+      if (res.data.data) {
+        adminData.value = res.data.data
+      }
       localStorage.setItem('user', JSON.stringify(adminData.value))
       profileDialogVisible.value = false
     } else {
@@ -148,15 +209,23 @@ const handleLogout = () => {
 .user-profile { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .admin-name { font-size: 14px; color: #666; }
 .admin-main { background-color: #f0f2f5; padding: 20px; }
-/* 针对侧边栏菜单图标的微调 */
-.admin-menu .el-icon {
-  margin-right: 8px !important; /* 将默认的大间距缩小为 8px */
-  font-size: 18px;            /* 统一图标大小 */
-}
 
-/* 确保文字对齐 */
-.admin-menu el-menu-item span {
-  display: inline-block;
-  vertical-align: middle;
+/* 摄像头样式控制 */
+.camera-wrapper {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #000;
+  width: 300px;
+}
+.video-preview {
+  display: block;
+}
+.camera-actions {
+  padding: 5px;
+  background: #f5f7fa;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
 </style>

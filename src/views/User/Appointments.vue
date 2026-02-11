@@ -315,7 +315,11 @@ const submit = async () => {
       customerPhone: user.phone,
       carLicense: user.carLicense,
       vehicleType: userVehicleType.value,
-      status: '待确认'
+      status: '待确认',
+
+      totalPrice: billing.value.totalPrice,
+      finalPrice: billing.value.finalPrice,
+      discount: billing.value.discountAmount
     }
     const res = await axios.post('http://localhost:8080/api/appointment/add', payload)
     if (res.data.success || res.data.code === 200) {

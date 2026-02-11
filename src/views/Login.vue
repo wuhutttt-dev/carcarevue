@@ -20,194 +20,201 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="账号" prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
+        <div v-if="isFaceLogin && loginForm.selectedRole === '管理员'" class="face-section">
+          <div class="video-wrapper">
+            <video ref="videoPlayer" autoplay playsinline width="300" height="225"></video>
+            <div class="scan-line"></div>
+          </div>
+          <el-button type="success" class="w-100" @click="handleFaceLogin" :loading="loading">
+            立即识别并登录
+          </el-button>
+        </div>
 
-        <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入密码"
-            show-password
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
+        <div v-else>
+          <el-form-item label="账号" prop="username">
+            <el-input
+              v-model="loginForm.username"
+              placeholder="请输入用户名"
+              @keyup.enter="handleLogin"
+            />
+          </el-form-item>
 
-        <el-button
-          type="primary"
-          class="w-100"
-          @click="handleLogin"
-          :loading="loading"
-        >
-          登录
-        </el-button>
+          <el-form-item label="密码" prop="password">
+            <el-input
+              v-model="loginForm.password"
+              type="password"
+              placeholder="请输入密码"
+              show-password
+              @keyup.enter="handleLogin"
+            />
+          </el-form-item>
 
-        <div class="register-link" v-if="loginForm.selectedRole === '用户'">
-          <span>没有账号？</span>
-          <el-link type="primary" @click="goToRegister">点击注册</el-link>
+          <el-button type="primary" class="w-100" @click="handleLogin" :loading="loading">
+            登录
+          </el-button>
+        </div>
+
+        <div class="login-footer">
+          <el-link
+            v-if="loginForm.selectedRole === '管理员'"
+            type="primary"
+            @click="toggleFaceMode"
+          >
+            {{ isFaceLogin ? '返回账号登录' : '管理员专用：人脸识别登录' }}
+          </el-link>
+
+          <div class="register-link" v-if="loginForm.selectedRole === '用户'">
+            <span>没有账号？</span>
+            <el-link type="primary" @click="goToRegister">点击注册</el-link>
+          </div>
         </div>
       </el-form>
+      <canvas ref="canvasOutput" width="400" height="300" style="display: none;"></canvas>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
 const router = useRouter()
-const loginFormRef = ref()
 const loading = ref(false)
+const isFaceLogin = ref(false)
 
-// 登录表单数据
+const videoPlayer = ref(null)
+const canvasOutput = ref(null)
+let mediaStream = null
+
 const loginForm = reactive({
   username: '',
   password: '',
-  selectedRole: '用户' // 默认选中“顾客”
+  selectedRole: '用户'
 })
 
-// 处理登录逻辑
+// 自动切换逻辑：角色一旦不是管理员，强制关闭人脸模式
+watch(() => loginForm.selectedRole, (role) => {
+  if (role !== '管理员') {
+    isFaceLogin.value = false
+    stopCamera()
+  }
+})
+
+// 开启/关闭人脸模式
+const toggleFaceMode = async () => {
+  isFaceLogin.value = !isFaceLogin.value
+  if (isFaceLogin.value) {
+    await nextTick()
+    startCamera()
+  } else {
+    stopCamera()
+  }
+}
+
+const startCamera = async () => {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 400, height: 300 }
+    })
+    if (videoPlayer.value) videoPlayer.value.srcObject = mediaStream
+  } catch (err) {
+    ElMessage.error('无法开启摄像头，请确保页面为 HTTPS 或 localhost')
+    isFaceLogin.value = false
+  }
+}
+
+const stopCamera = () => {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop())
+    mediaStream = null
+  }
+}
+
+/**
+ * 核心修改点：账号登录逻辑拦截
+ */
 const handleLogin = async () => {
-  // 1. 基本表单验证
-  if (!loginForm.username.trim()) {
-    ElMessage.warning('请输入用户名')
+  // 如果当前是管理员，拦截普通登录，强制切换到人脸
+  if (loginForm.selectedRole === '管理员' && !isFaceLogin.value) {
+    ElMessage.info('管理员身份请进行人脸验证')
+    toggleFaceMode()
     return
   }
-  if (!loginForm.password.trim()) {
-    ElMessage.warning('请输入密码')
-    return
+
+  // 正常校验
+  if (!loginForm.username.trim() || !loginForm.password.trim()) {
+    return ElMessage.warning('请输入用户名和密码')
   }
 
   loading.value = true
-
   try {
-    // 2. 根据选择的角色确定映射的后端接口地址
-    const roleApiMap = {
-      '用户': '/api/customer/login',
-      '工作人员': '/api/worker/login',
-      '管理员': '/api/admin/login'
-    }
-
-    const apiPath = roleApiMap[loginForm.selectedRole]
-    const apiUrl = `http://localhost:8080${apiPath}`
-
-    console.log(`[Login] 正在以 ${loginForm.selectedRole} 身份尝试登录: ${apiUrl}`)
-
-    // 3. 发送登录请求
-    const response = await axios.post(apiUrl, {
+    const apiMap = { '用户': '/api/customer/login', '工作人员': '/api/worker/login', '管理员': '/api/admin/login' }
+    const res = await axios.post(`http://localhost:8080${apiMap[loginForm.selectedRole]}`, {
       username: loginForm.username,
       password: loginForm.password
     })
 
-    // 4. 响应逻辑处理 (基于后端返回 Result 对象)
-    if (response.data && response.data.success === true) {
-      const userData = response.data.data
-
-      if (!userData) {
-        ElMessage.error('服务器未返回有效用户信息')
-        return
-      }
-
-      // 关键：手动补全角色信息，方便后续全局权限判断
-      userData.role = loginForm.selectedRole
-
-      // 安全清理：不存储敏感字段
-      delete userData.password
-
-      // 5. 持久化存储
-      localStorage.setItem('user', JSON.stringify(userData))
-      ElMessage.success(`欢迎回来，${userData.realName || userData.username}`)
-
-      // 6. 精准路由跳转
-      if (loginForm.selectedRole === '管理员') {
-        router.push('/admin')
-      } else if (loginForm.selectedRole === '工作人员') {
-        router.push('/worker')
-      } else {
-        router.push('/user') // 跳转到你刚才创建的用户主页
-      }
-
+    if (res.data.success) {
+      handleLoginSuccess(res.data.data)
     } else {
-      // 登录失败：显示后端传回的错误消息
-      ElMessage.error(response.data.message || '登录失败，请检查账号密码')
+      ElMessage.error(res.data.message || '登录失败')
     }
-
-  } catch (error) {
-    console.error('登录请求异常:', error)
-    handleError(error)
+  } catch (e) {
+    ElMessage.error('网络请求失败')
   } finally {
     loading.value = false
   }
 }
 
-// 统一错误处理
-const handleError = (error) => {
-  if (error.response) {
-    const status = error.response.status
-    if (status === 404) ElMessage.error('接口地址错误 (404)')
-    else if (status === 403) ElMessage.error('跨域被拒绝或权限不足 (403)')
-    else if (status === 500) ElMessage.error('服务器内部错误 (500)')
-    else ElMessage.error(`系统异常: ${status}`)
-  } else if (error.code === 'ERR_NETWORK') {
-    // 针对跨域 (CORS) 或后端未启动的典型报错提示
-    ElMessage.error('网络连接失败：请检查后端是否启动及CORS跨域配置')
-  } else {
-    ElMessage.error('登录请求失败')
+// 人脸登录逻辑
+const handleFaceLogin = async () => {
+  const context = canvasOutput.value.getContext('2d')
+  context.drawImage(videoPlayer.value, 0, 0, 400, 300)
+  const base64Image = canvasOutput.value.toDataURL('image/png').split(',')[1]
+
+  loading.value = true
+  try {
+    const res = await axios.post('http://localhost:8080/api/admin/faceLogin', {
+      image: base64Image
+    })
+    if (res.data.success) {
+      stopCamera()
+      handleLoginSuccess(res.data.data)
+    } else {
+      ElMessage.error(res.data.message || '人脸未匹配')
+    }
+  } catch (e) {
+    ElMessage.error('识别异常')
+  } finally {
+    loading.value = false
   }
 }
 
-// 跳转注册
-const goToRegister = () => {
-  router.push('/register')
+const handleLoginSuccess = (userData) => {
+  userData.role = loginForm.selectedRole
+  localStorage.setItem('user', JSON.stringify(userData))
+  ElMessage.success(`欢迎回来`)
+  const jump = { '管理员': '/admin', '工作人员': '/worker', '用户': '/user' }
+  router.push(jump[loginForm.selectedRole])
 }
+
+const goToRegister = () => router.push('/register')
 </script>
 
 <style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  /* 渐变色背景 */
-  background: linear-gradient(135deg, #74ebd5 0%, #9face6 100%);
-}
+.login-container { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #74ebd5 0%, #9face6 100%); }
+.login-card { width: 400px; border-radius: 12px; }
+.card-header { text-align: center; font-weight: bold; font-size: 20px; color: #409eff; }
+.w-100 { width: 100%; margin-top: 15px; height: 40px; }
 
-.login-card {
-  width: 400px;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-}
+/* 人脸识别扫描样式 */
+.face-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+.video-wrapper { position: relative; width: 300px; height: 225px; background: #000; border-radius: 8px; overflow: hidden; border: 2px solid #409eff; }
+.scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: #409eff; box-shadow: 0 0 8px #409eff; animation: scan 2s infinite linear; }
+@keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
 
-.card-header {
-  text-align: center;
-  font-weight: bold;
-  font-size: 20px;
-  color: #409eff;
-}
-
-.w-100 {
-  width: 100%;
-  margin-top: 15px;
-  height: 40px;
-  font-size: 16px;
-}
-
-.register-link {
-  text-align: center;
-  margin-top: 20px;
-  font-size: 14px;
-  color: #606266;
-}
-
-.register-link .el-link {
-  margin-left: 5px;
-  vertical-align: baseline;
-}
+.login-footer { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.register-link { font-size: 14px; color: #606266; }
 </style>
