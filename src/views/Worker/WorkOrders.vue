@@ -6,6 +6,17 @@
         <div class="worker-info">
           <div class="name-row">
             <span class="real-name">{{ user.realName || '未设置姓名' }}</span>
+            <el-select
+              v-model="user.workStatus"
+              placeholder="工作状态"
+              size="small"
+              style="width: 100px; margin-left: 10px;"
+              @change="handleStatusChange"
+            >
+              <el-option label="空闲" value="空闲" />
+              <el-option label="工作中" value="工作中" />
+              <el-option label="请假" value="请假" />
+            </el-select>
             <el-tag size="small" type="info" effect="plain">{{ user.jobTitle || '普通技师' }}</el-tag>
             <el-tooltip content="修改个人资料" placement="right">
               <el-icon class="edit-btn" @click="openEditDialog"><Edit /></el-icon>
@@ -325,6 +336,28 @@ const saveProfile = async () => {
   }
 }
 
+const handleStatusChange = async (newStatus) => {
+  try {
+    const res = await axios.post('http://localhost:8080/api/worker/updateWorkStatus', {
+      id: user.value.id,
+      status: newStatus
+    })
+
+    if (res.data.success) {
+      ElMessage.success(`状态已切换为: ${newStatus}`)
+      // 同步更新本地存储，防止刷新页面后重置
+      const updatedUser = { ...user.value, workStatus: newStatus }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      user.value = updatedUser
+    } else {
+      ElMessage.error('状态更新失败')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('网络错误，状态同步失败')
+  }
+}
+
 const handleLogout = () => {
   ElMessageBox.confirm('确定要退出登录吗？', '提示').then(() => {
     localStorage.clear()
@@ -353,4 +386,9 @@ onMounted(loadData)
 .task-tabs { background: #fff; border-radius: 8px; }
 .settings-container { padding: 60px 0; background: #fff; }
 .upload-tip { font-size: 12px; color: #999; margin-top: 5px; }
+/* 调整选择框样式使其更融入背景 */
+:deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  background-color: #f5f7fa;
+}
 </style>

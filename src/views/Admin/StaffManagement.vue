@@ -45,6 +45,9 @@
       width="500px"
     >
       <el-form :model="form" label-width="100px">
+        <el-form-item label="用户名">
+          <el-input v-model="form.username" placeholder="请输入登录账号" :disabled="!!form.id" />
+        </el-form-item>
         <el-form-item label="姓名">
           <el-input v-model="form.realName" placeholder="请输入真实姓名" />
         </el-form-item>
@@ -91,6 +94,7 @@ const dialogVisible = ref(false)
 // 响应式表单对象，已删除 jobTitle 和 specialization
 const form = ref({
   id: null,
+  username: '',
   realName: '',
   gender: '男',
   phone: '',

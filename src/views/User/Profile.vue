@@ -146,7 +146,7 @@ const handleUpdate = async () => {
   updating.value = true
   try {
     // 发送包含 vehicleType 的 userForm 对象到后端
-    const res = await axios.put('http://localhost:8080/api/customer/update', userForm)
+    const res = await axios.post('http://localhost:8080/api/customer/updateProfile', userForm)
 
     if (res.data.success || res.data.code === 200) {
       ElMessage.success('个人信息更新成功！')
