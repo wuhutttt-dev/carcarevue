@@ -71,8 +71,19 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="头像链接">
-          <el-input v-model="editForm.avatar" placeholder="图片 URL 地址" />
+        <el-form-item label="头像设置">
+          <el-upload
+            class="avatar-uploader"
+            action="http://localhost:8080/api/admin/uploadAvatar"
+            :show-file-list="false"
+            :on-success="handleAvatarSuccess"
+            :before-upload="beforeAvatarUpload"
+            name="file"
+          >
+            <img v-if="editForm.avatar" :src="editForm.avatar" class="avatar" />
+            <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+          </el-upload>
+          <div class="upload-tip">点击图片可重新上传</div>
         </el-form-item>
       </el-form>
 
@@ -89,7 +100,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar } from '@element-plus/icons-vue'
+import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 
@@ -193,6 +204,17 @@ const handleSave = async () => {
   }
 }
 
+// 头像上传成功回调
+const handleAvatarSuccess = (response, uploadFile) => {
+  if (response.success) {
+    // 后端直接返回了 webPath 字符串放在 data 里 (Result.ok("上传成功", webPath))
+    editForm.value.avatar = response.data
+    ElMessage.success('头像上传成功')
+  } else {
+    ElMessage.error(response.message || '上传失败')
+  }
+}
+
 const handleLogout = () => {
   ElMessageBox.confirm('确定要退出管理系统吗？', '提示', { type: 'warning' }).then(() => {
     localStorage.removeItem('user')
@@ -227,5 +249,36 @@ const handleLogout = () => {
   display: flex;
   justify-content: center;
   gap: 10px;
+}
+/* 头像上传组件样式 */
+.avatar-uploader .el-upload {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: var(--el-transition-duration-fast);
+}
+.avatar-uploader .el-upload:hover {
+  border-color: #409eff;
+}
+.avatar-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 100px;
+  height: 100px;
+  text-align: center;
+  line-height: 100px; /* 垂直居中 */
+}
+.avatar {
+  width: 100px;
+  height: 100px;
+  display: block;
+  object-fit: cover;
+}
+.upload-tip {
+  font-size: 12px;
+  color: #999;
+  margin-top: 5px;
 }
 </style>
