@@ -60,7 +60,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 
 const historyList = ref([])
@@ -77,9 +77,9 @@ const rateForm = ref({
 // 获取历史数据
 const fetchHistory = async () => {
   if (!user || !user.id) return
-  const res = await axios.get(`http://localhost:8080/api/appointment/user/${user.id}`)
-  if (res.data.success) {
-    historyList.value = res.data.data
+  const res = await request.get(`/api/appointment/user/${user.id}`)
+  if (res.success) {
+    historyList.value = res.data
   }
 }
 
@@ -99,16 +99,21 @@ const submitRate = async () => {
   }
 
   try {
-    // 调用我们在上一步定义的后端 /api/appointment/rate 接口
-    const res = await axios.post('http://localhost:8080/api/appointment/rate', rateForm.value)
-    if (res.data.success) {
+    // 确保 request 导入正确，路径前面没有空格
+    const res = await request.post('/api/appointment/rate', rateForm.value)
+
+    // 【关键修改】：res 现在直接就是 Result 对象，去掉中间的 .data
+    if (res.success) {
       ElMessage.success('评价成功，感谢您的反馈！')
       rateDialogVisible.value = false
-      fetchHistory() // 刷新列表，评价按钮会变成“已评价”
+      fetchHistory()
     } else {
-      ElMessage.error(res.data.message)
+      // 【修改】：同理，错误信息也在 res.message 中
+      ElMessage.error(res.message || '评价失败')
     }
   } catch (error) {
+    // 这里捕获的是网络异常，拦截器处理过的 401 不会走到这里
+    console.error(error)
     ElMessage.error('网络错误，提交失败')
   }
 }

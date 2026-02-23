@@ -102,7 +102,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -184,18 +184,18 @@ const capturePhoto = () => {
 const handleSave = async () => {
   saveLoading.value = true
   try {
-    const res = await axios.post('http://localhost:8080/api/admin/update', editForm.value)
-    if (res.data.success) {
+    const res = await request.post('/api/admin/update', editForm.value)
+    if (res.success) {
       ElMessage.success('个人信息更新成功')
       adminData.value = { ...editForm.value }
       // 后端应该返回更新后的 admin 对象，包含新的 faceId
-      if (res.data.data) {
-        adminData.value = res.data.data
+      if (res.data) {
+        adminData.value = res.data
       }
       localStorage.setItem('user', JSON.stringify(adminData.value))
       profileDialogVisible.value = false
     } else {
-      ElMessage.error(res.data.message || '保存失败')
+      ElMessage.error(res.message || '保存失败')
     }
   } catch (error) {
     ElMessage.error('网络错误，请检查后端 AdminController')
@@ -217,7 +217,7 @@ const handleAvatarSuccess = (response, uploadFile) => {
 
 const handleLogout = () => {
   ElMessageBox.confirm('确定要退出管理系统吗？', '提示', { type: 'warning' }).then(() => {
-    localStorage.removeItem('user')
+    localStorage.clear()
     router.push('/login')
   })
 }

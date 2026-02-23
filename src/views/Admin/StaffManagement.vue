@@ -84,7 +84,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Avatar } from '@element-plus/icons-vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
@@ -106,9 +106,9 @@ const form = ref({
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/admin/listStaff')
-    if (res.data.success) {
-      tableData.value = res.data.data
+    const res = await request.get('/api/admin/listStaff')
+    if (res.success) {
+      tableData.value = res.data
     }
   } catch (error) {
     ElMessage.error('获取数据失败')
@@ -133,13 +133,13 @@ const handleEdit = (row) => {
 const submitForm = async () => {
   const api = form.value.id ? '/updateStaff' : '/addStaff'
   try {
-    const res = await axios.post('http://localhost:8080/api/admin' + api, form.value)
-    if (res.data.success) {
+    const res = await request.post('/api/admin' + api, form.value)
+    if (res.success) {
       ElMessage.success('操作成功')
       dialogVisible.value = false
       loadData()
     } else {
-      ElMessage.error(res.data.message || '操作失败')
+      ElMessage.error(res.message || '操作失败')
     }
   } catch (error) {
     ElMessage.error('网络请求错误')
@@ -154,8 +154,8 @@ const handleDel = (id) => {
     type: 'warning'
   }).then(async () => {
     try {
-      const res = await axios.delete(`http://localhost:8080/api/admin/deleteStaff/${id}`)
-      if (res.data.success) {
+      const res = await request.delete(`/api/admin/deleteStaff/${id}`)
+      if (res.success) {
         ElMessage.success('删除成功')
         loadData()
       }

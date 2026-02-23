@@ -128,7 +128,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Tools, Refresh, Plus, Picture } from '@element-plus/icons-vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const serviceList = ref([])
@@ -153,9 +153,9 @@ const editForm = ref({ ...initialForm })
 const fetchServices = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:8080/api/service-item/listByCategory?category=${activeCategory.value}`)
-    if (res.data.success) {
-      serviceList.value = res.data.data
+    const res = await request.get(`/api/service-item/listByCategory?category=${activeCategory.value}`)
+    if (res.success) {
+      serviceList.value = res.data
     }
   } catch (error) {
     ElMessage.error('获取列表失败')
@@ -196,8 +196,8 @@ const beforeUpload = (file) => {
 const submitUpdate = async () => {
   submitting.value = true
   try {
-    const res = await axios.post('http://localhost:8080/api/service-item/update', editForm.value)
-    if (res.data.success) {
+    const res = await request.post('/api/service-item/update', editForm.value)
+    if (res.success) {
       ElMessage.success('保存成功')
       dialogVisible.value = false
       fetchServices()
@@ -210,8 +210,8 @@ const submitUpdate = async () => {
 const confirmDelete = (row) => {
   ElMessageBox.confirm(`确定要删除“${row.name}”吗？`, '警告', { type: 'warning' }).then(async () => {
     try {
-      const res = await axios.delete(`http://localhost:8080/api/service-item/delete/${row.id}`)
-      if (res.data.success) {
+      const res = await request.delete(`/api/service-item/delete/${row.id}`)
+      if (res.success) {
         ElMessage.success('已删除')
         fetchServices()
       }

@@ -117,7 +117,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 
 const historyList = ref([])
@@ -138,22 +138,30 @@ const faultImages = ref([])
 // 1. 获取预约列表
 const fetchHistory = async () => {
   const userStr = localStorage.getItem('user')
-  if (!userStr) return
+  if (!userStr) {
+    // 如果没有用户信息，可以提示并跳转
+    router.push('/login')
+    return
+  }
 
   const user = JSON.parse(userStr)
   if (!user.id) return
 
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:8080/api/appointment/user/${user.id}`)
-    if (res.data.success || res.data.code === 200) {
-      historyList.value = res.data.data
+    // 这里的路径建议与后端确认。
+    // 如果后端改成了“通过Token识别用户”，路径可以简化为 /api/appointment/my
+    const res = await request.get(`/api/appointment/user/${user.id}`)
+
+    if (res.success) {
+      // 成功：res 就是 Result 对象，res.data 是 Appointment 列表
+      historyList.value = res.data
     } else {
-      ElMessage.error(res.data.message || '获取数据失败')
+      ElMessage.error(res.message || '获取数据失败')
     }
-  } catch (e) {
-    console.error("API 请求失败:", e)
-    ElMessage.error('网络错误')
+  } catch (err) {
+    // 此时捕获的是非 401 的网络错误
+    console.error('获取历史记录失败:', err)
   } finally {
     loading.value = false
   }
@@ -180,9 +188,9 @@ const viewFaultDetail = async (appointmentId) => {
   loadingFault.value = true
   try {
     // 调用后端接口：此处路径需与 Controller 定义一致
-    const res = await axios.get(`http://localhost:8080/api/faults/findByAppointment/${appointmentId}`)
-    if (res.data.success) {
-      currentFault.value = res.data.data
+    const res = await request.get(`/api/faults/findByAppointment/${appointmentId}`)
+    if (res.success) {
+      currentFault.value = res.data
       // 解析后端用逗号拼接的图片字符串
       if (currentFault.value && currentFault.value.faultImages) {
         faultImages.value = currentFault.value.faultImages.split(',')
@@ -206,13 +214,13 @@ const viewFaultDetail = async (appointmentId) => {
 const handleAgree = async (faultId) => {
   try {
     // 调用后端处理接口，对应 Service 中的 handleCustomerResponse 方法
-    const res = await axios.post(`http://localhost:8080/api/faults/handle?faultId=${faultId}&isAgreed=true`)
-    if (res.data.success) {
+    const res = await request.post(`/api/faults/handle?faultId=${faultId}&isAgreed=true`)
+    if (res.success) {
       ElMessage.success('已确认维修项目，订单内容和价格已更新')
       faultDialogVisible.value = false
       fetchHistory() // 刷新列表以显示更新后的服务内容或价格
     } else {
-      ElMessage.error(res.data.message || '操作失败')
+      ElMessage.error(res.message || '操作失败')
     }
   } catch (err) {
     ElMessage.error('网络请求失败')
@@ -241,19 +249,26 @@ const submitCancel = async () => {
   try {
     const payload = {
       id: currentCancelId.value,
-      status: 4,
+      status: 4, // 状态码 4 代表已取消
       cancelReason: cancelReason.value
     }
-    const res = await axios.put('http://localhost:8080/api/appointment/updateStatus', payload)
-    if (res.data.success || res.data.code === 200) {
+
+    // 【修改 1】：将 request.put 替换为 request.put，并移除 http://localhost:8080
+    // 这样请求头才会自动带上 Authorization Token
+    const res = await request.put('/api/appointment/updateStatus', payload)
+
+    // 【修改 2】：拦截器已返回 response.data，所以这里直接拿 res.success
+    if (res.success || res.code === 200) {
       ElMessage.success('已取消预约')
       cancelDialogVisible.value = false
-      fetchHistory()
+      fetchHistory() // 刷新列表
     } else {
-      ElMessage.error(res.data.message || '取消失败')
+      // 【修改 3】：报错提示也直接从 res 读取
+      ElMessage.error(res.message || '取消失败')
     }
   } catch (e) {
-    ElMessage.error('操作失败')
+    // 这里的 e 是网络错误或 401 拦截抛出的异常
+    console.error(e)
   } finally {
     submitting.value = false
   }

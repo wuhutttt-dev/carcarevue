@@ -45,7 +45,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Money, Document, User } from '@element-plus/icons-vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 
@@ -56,13 +56,13 @@ const pieChartRef = ref(null)
 // 获取数据
 const fetchData = async () => {
   try {
-    const res = await axios.get('http://localhost:8080/api/appointment/statistics')
-    if (res.data.success) {
-      stats.value = res.data.data
-      renderChart(res.data.data.statusCounts)
+    const res = await request.get('/api/appointment/statistics')
+    if (res.success) {
+      stats.value = res.data
+      renderChart(res.data.statusCounts)
     }
-    const userRes = await axios.get('http://localhost:8080/api/customer/listAll')
-    if (userRes.data.success) userCount.value = userRes.data.data.length
+    const userRes = await request.get('/api/customer/listAll')
+    if (userRes.success) userCount.value = userRes.data.length
   } catch (error) {
     ElMessage.error('获取统计数据失败，请确保后端已重启')
   }

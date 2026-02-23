@@ -106,7 +106,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick, InfoFilled } from '@element-plus/icons-vue'
 
@@ -285,9 +285,9 @@ const discountTip = computed(() => {
 const loadServices = async () => {
   loadingServices.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/service-item/list')
-    if (res.data.success || res.data.code === 200) {
-      serviceOptions.value = res.data.data
+    const res = await request.get('/api/service-item/list')
+    if (res.success || res.code === 200) {
+      serviceOptions.value = res.data
     }
   } catch (e) {
     ElMessage.error('加载服务失败')
@@ -321,12 +321,16 @@ const submit = async () => {
       finalPrice: billing.value.finalPrice,
       discount: billing.value.discountAmount
     }
-    const res = await axios.post('http://localhost:8080/api/appointment/add', payload)
-    if (res.data.success || res.data.code === 200) {
+    const res = await request.post('/api/appointment/add', payload)
+    if (res.success || res.code === 200) {
       ElMessage.success('预约成功！')
       reset()
+    } else {
+      // 【补充】如果后端返回失败（如名额已满），需要给出提示
+      ElMessage.error(res.message || '预约失败')
     }
   } catch (error) {
+    console.error(error)
     ElMessage.error('无法连接到服务器')
   } finally {
     loading.value = false

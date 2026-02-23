@@ -75,7 +75,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 import { List, Search, Refresh } from '@element-plus/icons-vue'
 
@@ -97,11 +97,11 @@ const statusMap = {
 const fetchOrders = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/appointment/listAll')
-    if (res.data.success) {
-      orderList.value = res.data.data
+    const res = await request.get('/api/appointment/listAll')
+    if (res.success) {
+      orderList.value = res.data
     } else {
-      ElMessage.error(res.data.message || '数据加载失败')
+      ElMessage.error(res.message || '数据加载失败')
     }
   } catch (error) {
     console.error('Fetch Error:', error)
@@ -137,13 +137,13 @@ const handleUpdate = async (id, nextStatus) => {
       workerName: ''     // 姓名设为空字符串
     }
 
-    const res = await axios.post('http://localhost:8080/api/appointment/updateStatus', params)
+    const res = await request.post('/api/appointment/updateStatus', params)
 
-    if (res.data.success) {
+    if (res.success) {
       ElMessage.success(`订单已变更为: ${nextStatus}`)
       fetchOrders() // 刷新列表
     } else {
-      ElMessage.error(res.data.message || '更新失败')
+      ElMessage.error(res.message || '更新失败')
     }
   } catch (error) {
     console.error('Update Error:', error)

@@ -72,7 +72,7 @@ const handleMenuSelect = (index) => {
 }
 
 const handleLogout = () => {
-  localStorage.removeItem('user')
+  localStorage.clear()
   router.push('/login')
   ElMessage.success('已安全退出')
 }

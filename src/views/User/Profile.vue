@@ -58,7 +58,7 @@
 
 <script setup>
 import { reactive, onMounted, ref, watch } from 'vue' // 确保导入了 watch
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
@@ -113,9 +113,9 @@ const loadUserData = async () => {
   const user = JSON.parse(userStr)
   loading.value = true
   try {
-    const res = await axios.get(`http://localhost:8080/api/customer/${user.id}`)
-    if (res.data.success || res.data.code === 200) {
-      const dbData = res.data.data
+    const res = await request.get(`/api/customer/${user.id}`)
+    if (res.success || res.code === 200) {
+      const dbData = res.data
 
       // 【性别转换逻辑】将数据库存的字符串 "男"/"女" 转回前端用的数字 1/2 (保持不变)
       if (typeof dbData.gender === 'string') {
@@ -146,20 +146,20 @@ const handleUpdate = async () => {
   updating.value = true
   try {
     // 发送包含 vehicleType 的 userForm 对象到后端
-    const res = await axios.post('http://localhost:8080/api/customer/updateProfile', userForm)
+    const res = await request.post('/api/customer/updateProfile', userForm)
 
-    if (res.data.success || res.data.code === 200) {
+    if (res.success || res.code === 200) {
       ElMessage.success('个人信息更新成功！')
 
       // 获取旧的用户信息并合并，防止权限等信息丢失
       const oldUser = JSON.parse(localStorage.getItem('user') || '{}')
-      const updatedDataFromBackend = res.data.data
+      const updatedDataFromBackend = res.data
 
       const newUser = { ...oldUser, ...updatedDataFromBackend }
       localStorage.setItem('user', JSON.stringify(newUser))
 
     } else {
-      ElMessage.error(res.data.message || '更新失败')
+      ElMessage.error(res.message || '更新失败')
     }
   } catch (e) {
     console.error(e)

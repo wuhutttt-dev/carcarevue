@@ -78,7 +78,7 @@
 import { reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import request from '@/utils/request'
 
 const router = useRouter()
 const loading = ref(false)
@@ -151,15 +151,15 @@ const handleLogin = async () => {
   loading.value = true
   try {
     const apiMap = { '用户': '/api/customer/login', '工作人员': '/api/worker/login', '管理员': '/api/admin/login' }
-    const res = await axios.post(`http://localhost:8080${apiMap[loginForm.selectedRole]}`, {
+    const res = await request.post(`${apiMap[loginForm.selectedRole]}`, {
       username: loginForm.username,
       password: loginForm.password
     })
 
-    if (res.data.success) {
-      handleLoginSuccess(res.data.data)
+    if (res.success) {
+      handleLoginSuccess(res.data)
     } else {
-      ElMessage.error(res.data.message || '登录失败')
+      ElMessage.error(res.message || '登录失败')
     }
   } catch (e) {
     ElMessage.error('网络请求失败')
@@ -176,28 +176,38 @@ const handleFaceLogin = async () => {
 
   loading.value = true
   try {
-    const res = await axios.post('http://localhost:8080/api/admin/faceLogin', {
+    const res = await request.post('/api/admin/faceLogin', {
       image: base64Image
     })
-    if (res.data.success) {
+    if (res.success) {
       stopCamera()
-      handleLoginSuccess(res.data.data)
+      handleLoginSuccess(res.data)
     } else {
-      ElMessage.error(res.data.message || '人脸未匹配')
+      ElMessage.error(res.message || '人脸未匹配')
     }
   } catch (e) {
+    // 响应拦截器里的 401 错误会被 request.js 捕获，这里处理其他异常
+    console.error(e)
     ElMessage.error('识别异常')
   } finally {
     loading.value = false
   }
 }
 
-const handleLoginSuccess = (userData) => {
-  userData.role = loginForm.selectedRole
-  localStorage.setItem('user', JSON.stringify(userData))
-  ElMessage.success(`欢迎回来`)
-  const jump = { '管理员': '/admin', '工作人员': '/worker', '用户': '/user' }
-  router.push(jump[loginForm.selectedRole])
+const handleLoginSuccess = (data) => {
+  // data 此时对应后端返回的 resMap，包含 user 和 token
+  const userData = data.user;
+  const token = data.token;
+
+  userData.role = loginForm.selectedRole;
+
+  // 分别存储用户信息和 Token
+  localStorage.setItem('user', JSON.stringify(userData));
+  localStorage.setItem('token', token); // 供 request.js 拦截器读取
+
+  ElMessage.success(`欢迎回来`);
+  const jump = { '管理员': '/admin', '工作人员': '/worker', '用户': '/user' };
+  router.push(jump[loginForm.selectedRole]);
 }
 
 const goToRegister = () => router.push('/register')

@@ -41,7 +41,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import request from '@/utils/request'
 
 const router = useRouter()
 const regFormRef = ref()
@@ -78,17 +78,17 @@ const handleRegister = async () => {
 
     loading.value = true
     try {
-      const res = await axios.post('http://localhost:8080/api/customer/register', {
+      const res = await request.post('/api/customer/register', {
         username: regForm.username,
         password: regForm.password,
         phone: regForm.phone
       })
 
-      if (res.data.success) {
+      if (res.success) {
         ElMessage.success('注册成功！正在跳转登录...')
         setTimeout(() => router.push('/login'), 1500)
       } else {
-        ElMessage.error(res.data.message)
+        ElMessage.error(res.message)
       }
     } catch (error) {
       ElMessage.error('网络错误，注册失败')

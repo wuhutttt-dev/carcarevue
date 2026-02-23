@@ -89,7 +89,7 @@
 <script setup>
 // 脚本部分逻辑无需变动，保持原样
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { Search, Refresh, User as UserIcon } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -104,8 +104,8 @@ const currentUser = ref({})
 const fetchUsers = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/customer/listAll')
-    if (res.data.success) userList.value = res.data.data
+    const res = await request.get('/api/customer/listAll')
+    if (res.success) userList.value = res.data
   } catch (error) {
     ElMessage.error('加载数据失败')
   } finally {
@@ -118,9 +118,9 @@ const showOrders = async (user) => {
   orderDialogVisible.value = true
   orderLoading.value = true
   try {
-    const res = await axios.get(`http://localhost:8080/api/appointment/listAll`)
-    if (res.data.success) {
-      userOrders.value = res.data.data.filter(order => order.customerName === user.realName)
+    const res = await request.get(`/api/appointment/listAll`)
+    if (res.success) {
+      userOrders.value = res.filter(order => order.customerName === user.realName)
     }
   } catch (error) {
     ElMessage.error('获取订单列表失败')
@@ -132,11 +132,11 @@ const showOrders = async (user) => {
 const toggleStatus = async (user) => {
   const newStatus = user.status === '正常' ? '禁用' : '正常'
   try {
-    const res = await axios.post('http://localhost:8080/api/customer/updateStatus', {
+    const res = await request.post('/api/customer/updateStatus', {
       id: user.id,
       status: newStatus
     })
-    if (res.data.success) {
+    if (res.success) {
       ElMessage.success(`用户已${newStatus === '正常' ? '恢复' : '停用'}`)
       fetchUsers()
     }
@@ -149,8 +149,8 @@ const handleDelete = (id) => {
   ElMessageBox.confirm('确定要注销该客户档案吗？此操作不可恢复。', '警告', {
     type: 'error'
   }).then(async () => {
-    const res = await axios.delete(`http://localhost:8080/api/customer/delete/${id}`)
-    if (res.data.success) {
+    const res = await request.delete(`/api/customer/delete/${id}`)
+    if (res.success) {
       ElMessage.success('注销成功')
       fetchUsers()
     }

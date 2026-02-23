@@ -73,7 +73,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue' // 必须引入 computed
-import axios from 'axios'
+import request from '@/utils/request'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Timer, Picture } from '@element-plus/icons-vue'
@@ -108,9 +108,9 @@ const filteredServiceList = computed(() => {
 const fetchServices = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8080/api/service-item/list')
-    if (res.data.success || res.data.code === 200) {
-      serviceList.value = res.data.data //
+    const res = await request.get('/api/service-item/list')
+    if (res.success || res.code === 200) {
+      serviceList.value = res.data
     }
   } catch (e) {
     ElMessage.error('获取服务列表失败')

@@ -194,7 +194,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit, SwitchButton, Plus } from '@element-plus/icons-vue'
 
@@ -219,8 +219,19 @@ const faultForm = ref({
 })
 
 const loadData = async () => {
-  const res = await axios.get('http://localhost:8080/api/appointment/listAll')
-  if (res.data.success) allOrders.value = res.data.data
+  try {
+    const res = await request.get('/api/appointment/listAll')
+
+    // 拦截器已经处理了 response.data，所以这里直接判断 res.success
+    if (res.success) {
+      allOrders.value = res.data
+    } else {
+      ElMessage.error(res.message || '获取数据失败')
+    }
+  } catch (error) { // catch 块保留
+    console.error(error)
+    ElMessage.error('网络异常，无法获取预约数据')
+  }
 }
 
 const currentWorkerIdentifier = computed(() => user.value.realName || user.value.username)
@@ -231,10 +242,10 @@ const processingOrders = computed(() => allOrders.value.filter(o => o.status ===
 const finishedOrders = computed(() => allOrders.value.filter(o => o.status === '已完成' && o.workerName === currentWorkerIdentifier.value))
 
 const handleUpdate = async (id, status) => {
-  const res = await axios.post('http://localhost:8080/api/appointment/updateStatus', {
+  const res = await request.post('/api/appointment/updateStatus', {
     id: id, status: status, workerName: currentWorkerIdentifier.value, workerId: user.value.id
   })
-  if (res.data.success) { ElMessage.success('操作成功'); loadData(); }
+  if (res.success) { ElMessage.success('操作成功'); loadData(); }
 }
 
 const openFaultDialog = async (row) => {
@@ -244,9 +255,9 @@ const openFaultDialog = async (row) => {
   uploadedAttachmentIds.value = []
 
   try {
-    const res = await axios.get('http://localhost:8080/api/service-item/list')
-    if (res.data.success) {
-      repairItems.value = res.data.data.filter(item => item.category === 'repair')
+    const res = await request.get('/api/service-item/list')
+    if (res.success) {
+      repairItems.value = res.filter(item => item.category === 'repair')
     }
     faultVisible.value = true
   } catch (err) {
@@ -301,11 +312,11 @@ const submitFault = async () => {
       attachmentIds: uploadedAttachmentIds.value
     }
 
-    const res = await axios.post('http://localhost:8080/api/faults/report', postData)
+    const res = await request.post('/api/faults/report', postData)
     console.log("服务器响应内容:", res.data);
 
     // 逻辑修正：显式判断 success 字段
-    if (res.data && res.data.success === true) {
+    if (res.data && res.success === true) {
       ElMessage.success('故障上报成功');
       faultVisible.value = false;
 
@@ -314,7 +325,7 @@ const submitFault = async () => {
       uploadedAttachmentIds.value = [];
       loadData();
     } else {
-      ElMessage.error('上报失败：' + (res.data.message || '未知原因'));
+      ElMessage.error('上报失败：' + (res.message || '未知原因'));
     }
   } catch (error) {
     console.error("请求失败，详细错误信息:", error);
@@ -327,9 +338,9 @@ const submitFault = async () => {
 
 const openEditDialog = () => { editForm.value = { ...user.value }; editVisible.value = true; }
 const saveProfile = async () => {
-  const res = await axios.post('http://localhost:8080/api/worker/updateProfile', editForm.value)
-  if (res.data.success) {
-    user.value = { ...user.value, ...res.data.data }
+  const res = await request.post('/api/worker/updateProfile', editForm.value)
+  if (res.success) {
+    user.value = { ...user.value, ...res.data }
     localStorage.setItem('user', JSON.stringify(user.value))
     editVisible.value = false
     ElMessage.success('更新成功')
@@ -338,22 +349,21 @@ const saveProfile = async () => {
 
 const handleStatusChange = async (newStatus) => {
   try {
-    const res = await axios.post('http://localhost:8080/api/worker/updateWorkStatus', {
+    const res = await request.post('/api/worker/updateWorkStatus', {
       id: user.value.id,
       status: newStatus
     })
 
-    if (res.data.success) {
+    // 【修改】去掉多余的 .data 层级
+    if (res.success) {
       ElMessage.success(`状态已切换为: ${newStatus}`)
-      // 同步更新本地存储，防止刷新页面后重置
       const updatedUser = { ...user.value, workStatus: newStatus }
       localStorage.setItem('user', JSON.stringify(updatedUser))
       user.value = updatedUser
     } else {
-      ElMessage.error('状态更新失败')
+      ElMessage.error(res.message || '状态更新失败')
     }
   } catch (error) {
-    console.error(error)
     ElMessage.error('网络错误，状态同步失败')
   }
 }

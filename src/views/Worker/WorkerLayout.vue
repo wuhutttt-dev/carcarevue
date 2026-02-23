@@ -27,12 +27,14 @@
 <script setup>
 import { Tools, List } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const user = JSON.parse(localStorage.getItem('user') || '{"realName":"技师"}')
 
 const handleLogout = () => {
-  localStorage.removeItem('user')
+  localStorage.clear()
+  ElMessage.success('已安全退出')
   router.push('/login')
 }
 </script>
