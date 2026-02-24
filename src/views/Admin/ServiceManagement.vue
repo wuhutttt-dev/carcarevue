@@ -93,6 +93,7 @@
           <el-upload
             class="service-uploader"
             action="http://localhost:8080/api/service-item/uploadImage"
+            :headers="uploadHeaders"
             :show-file-list="false"
             :on-success="handleUploadSuccess"
             :before-upload="beforeUpload"
@@ -126,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Tools, Refresh, Plus, Picture } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -136,6 +137,10 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const activeCategory = ref('maintenance')
+
+const uploadHeaders = computed(() => ({
+  Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+}));
 
 // 表单初始状态，已增加 vehicleType 默认值
 const initialForm = {

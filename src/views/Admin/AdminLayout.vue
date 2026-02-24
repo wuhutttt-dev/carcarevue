@@ -47,6 +47,12 @@
         <el-form-item label="真实姓名">
           <el-input v-model="editForm.realName" placeholder="请输入真实姓名" />
         </el-form-item>
+        <el-form-item label="性别">
+          <el-radio-group v-model="editForm.gender">
+            <el-radio value="男">男</el-radio>
+            <el-radio value="女">女</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="手机号">
           <el-input v-model="editForm.phone" placeholder="请输入手机号" />
         </el-form-item>
@@ -75,6 +81,7 @@
           <el-upload
             class="avatar-uploader"
             action="http://localhost:8080/api/admin/uploadAvatar"
+            :headers="uploadHeaders"
             :show-file-list="false"
             :on-success="handleAvatarSuccess"
             :before-upload="beforeAvatarUpload"
@@ -115,6 +122,10 @@ const hasCaptured = ref(false)
 const videoPlayer = ref(null)
 const canvasOutput = ref(null)
 let mediaStream = null
+
+const uploadHeaders = computed(() => ({
+  Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+}));
 
 const adminData = ref({})
 const editForm = ref({
@@ -202,6 +213,23 @@ const handleSave = async () => {
   } finally {
     saveLoading.value = false
   }
+}
+
+// 头像上传前的验证
+const beforeAvatarUpload = (file) => {
+  // 验证文件类型（必须为图片）
+  const isImage = file.type.startsWith('image/')
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件！')
+    return false
+  }
+  // 验证文件大小（限制 200MB）
+  const isLt200M = file.size / 1024 / 1024 < 200
+  if (!isLt200M) {
+    ElMessage.error('图片大小不能超过 200MB！')
+    return false
+  }
+  return true
 }
 
 // 头像上传成功回调

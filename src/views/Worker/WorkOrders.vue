@@ -172,6 +172,7 @@
           <el-upload
             v-model:file-list="fileList"
             action="http://localhost:8080/api/attachment/upload"
+            :headers="uploadHeaders"
             :data="{ type: 'fault' }"
             list-type="picture-card"
             :on-success="handleUploadSuccess"
@@ -210,6 +211,10 @@ const currentOrder = ref(null)
 
 const fileList = ref([])
 const uploadedAttachmentIds = ref([])
+
+const uploadHeaders = computed(() => ({
+  Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+}));
 
 const faultForm = ref({
   itemId: null,

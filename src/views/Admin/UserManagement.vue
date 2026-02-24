@@ -120,7 +120,7 @@ const showOrders = async (user) => {
   try {
     const res = await request.get(`/api/appointment/listAll`)
     if (res.success) {
-      userOrders.value = res.filter(order => order.customerName === user.realName)
+      userOrders.value = res.data.filter(order => order.customerName === user.realName)
     }
   } catch (error) {
     ElMessage.error('获取订单列表失败')

@@ -249,13 +249,13 @@ const submitCancel = async () => {
   try {
     const payload = {
       id: currentCancelId.value,
-      status: 4, // 状态码 4 代表已取消
+      status: "已取消", // 状态码 4 代表已取消
       cancelReason: cancelReason.value
     }
 
-    // 【修改 1】：将 request.put 替换为 request.put，并移除 http://localhost:8080
+    // 【修改 1】：将 request.put 替换为 request.post，并移除 http://localhost:8080
     // 这样请求头才会自动带上 Authorization Token
-    const res = await request.put('/api/appointment/updateStatus', payload)
+    const res = await request.post('/api/appointment/updateStatus', payload)
 
     // 【修改 2】：拦截器已返回 response.data，所以这里直接拿 res.success
     if (res.success || res.code === 200) {
