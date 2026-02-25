@@ -70,10 +70,22 @@
 
     <el-dialog v-model="faultDialogVisible" title="技师检查报告" width="550px">
       <div v-if="currentFault" v-loading="loadingFault">
+        <!-- 紧急程度提示 -->
         <el-alert
-          :title="currentFault.urgencyLevel === 2 ? '发现紧急安全隐患' : '发现建议维修项'"
+          :title="currentFault.urgencyLevel === 2 ? '⚠️ 发现紧急安全隐患！必须立即处理' : '发现建议维修项'"
           :type="currentFault.urgencyLevel === 2 ? 'error' : 'warning'"
-          show-icon :closable="false"
+          show-icon
+          :closable="false"
+        />
+
+        <!-- 额外提示（极度危险时强制说明） -->
+        <el-alert
+          v-if="currentFault.urgencyLevel === 2"
+          title="该隐患影响行驶安全，系统建议您必须同意维修"
+          type="error"
+          show-icon
+          style="margin-top: 10px;"
+          :closable="false"
         />
 
         <div style="margin-top: 20px;">
@@ -103,10 +115,18 @@
           <p v-if="faultImages.length === 0" style="color: #999; font-size: 13px;">技师未上传照片</p>
         </div>
       </div>
+
       <template #footer>
         <el-button @click="faultDialogVisible = false">关闭</el-button>
+
+        <!-- 根据严重程度显示不同按钮 -->
         <el-button
-          v-if="currentFault?.status === '待确认'"
+          v-if="currentFault?.urgencyLevel === 1"
+          type="danger"
+          @click="handleIgnore(currentFault.id)"
+        >忽略（下次处理）</el-button>
+
+        <el-button
           type="primary"
           @click="handleAgree(currentFault.id)"
         >同意维修并更新订单</el-button>
@@ -214,7 +234,10 @@ const viewFaultDetail = async (appointmentId) => {
 const handleAgree = async (faultId) => {
   try {
     // 调用后端处理接口，对应 Service 中的 handleCustomerResponse 方法
-    const res = await request.post(`/api/faults/handle?faultId=${faultId}&isAgreed=true`)
+    const res = await request.post('/api/faults/handle', {
+      faultId: faultId,
+      isAgreed: true
+    })
     if (res.success) {
       ElMessage.success('已确认维修项目，订单内容和价格已更新')
       faultDialogVisible.value = false
@@ -223,6 +246,29 @@ const handleAgree = async (faultId) => {
       ElMessage.error(res.message || '操作失败')
     }
   } catch (err) {
+    ElMessage.error('网络请求失败')
+  }
+}
+
+/**
+ * 顾客选择忽略（仅 urgencyLevel=1 时可用）
+ */
+const handleIgnore = async (faultId) => {
+  try {
+    const res = await request.post('/api/faults/handle', {
+      faultId: faultId,
+      isAgreed: false
+    })
+
+    if (res.success) {
+      ElMessage.success('✅ 已忽略该隐患（下次保养时再处理）')
+      faultDialogVisible.value = false
+      fetchHistory()
+    } else {
+      ElMessage.error(res.message || '操作失败')
+    }
+  } catch (err) {
+    console.error(err)
     ElMessage.error('网络请求失败')
   }
 }

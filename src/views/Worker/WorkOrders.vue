@@ -262,7 +262,7 @@ const openFaultDialog = async (row) => {
   try {
     const res = await request.get('/api/service-item/list')
     if (res.success) {
-      repairItems.value = res.filter(item => item.category === 'repair')
+      repairItems.value = res.data.filter(item => item.category === 'repair')
     }
     faultVisible.value = true
   } catch (err) {
@@ -321,7 +321,7 @@ const submitFault = async () => {
     console.log("服务器响应内容:", res.data);
 
     // 逻辑修正：显式判断 success 字段
-    if (res.data && res.success === true) {
+    if (res.success === true) {
       ElMessage.success('故障上报成功');
       faultVisible.value = false;
 
