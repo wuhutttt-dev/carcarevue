@@ -13,6 +13,18 @@
         <el-table-column prop="carModel" label="车型" width="150" />
         <el-table-column prop="serviceType" label="服务项目" width="200" />
 
+        <el-table-column label="实付金额" width="150">
+          <template #default="scope">
+            <div class="price-container">
+              <span class="final-price">¥{{ scope.row.finalPrice || 0 }}</span>
+
+              <span v-if="scope.row.totalPrice > scope.row.finalPrice" class="original-price">
+                ¥{{ scope.row.totalPrice }}
+              </span>
+            </div>
+          </template>
+        </el-table-column>
+
         <el-table-column label="状态" width="120">
           <template #default="scope">
             <el-tag :type="getStatusTag(scope.row.status)">
@@ -207,21 +219,38 @@ const getStatusTag = (status) => {
 const viewFaultDetail = async (appointmentId) => {
   loadingFault.value = true
   try {
-    // 调用后端接口：此处路径需与 Controller 定义一致
     const res = await request.get(`/api/faults/findByAppointment/${appointmentId}`)
-    if (res.success) {
-      currentFault.value = res.data
-      // 解析后端用逗号拼接的图片字符串
-      if (currentFault.value && currentFault.value.faultImages) {
-        faultImages.value = currentFault.value.faultImages.split(',')
+
+    // 【核心修复】：判断返回的是否为数组
+    if (res.success && res.data) {
+      // 如果后端返回的是数组，取第一条显示（兼容你目前的单条显示弹窗）
+      if (Array.isArray(res.data)) {
+        currentFault.value = res.data.length > 0 ? res.data[0] : null
+      } else {
+        currentFault.value = res.data
+      }
+
+      // 如果没数据，提示并返回
+      if (!currentFault.value) {
+        ElMessage.info('技師正在检查车辆，暂无异常报告')
+        return
+      }
+
+      // 解析图片
+      if (currentFault.value.faultImages) {
+        // 兼容处理：如果图片是数组则直接用，如果是字符串则分割
+        const images = currentFault.value.faultImages
+        faultImages.value = typeof images === 'string' ? images.split(',') : images
       } else {
         faultImages.value = []
       }
+
       faultDialogVisible.value = true
     } else {
       ElMessage.info('技师正在检查车辆，暂无异常报告')
     }
   } catch (error) {
+    console.error('获取报告失败:', error)
     ElMessage.error('获取检查报告失败')
   } finally {
     loadingFault.value = false
@@ -335,5 +364,24 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.price-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.final-price {
+  color: #f56c6c; /* 红色醒目显示实付 */
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.original-price {
+  color: #909399;
+  text-decoration: line-through; /* 划线价 */
+  font-size: 12px;
+  margin-top: 2px;
 }
 </style>

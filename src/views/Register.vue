@@ -24,6 +24,10 @@
           <el-input v-model="regForm.phone" placeholder="用于接收保养通知" />
         </el-form-item>
 
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="regForm.email" placeholder="用于找回密码" />
+        </el-form-item>
+
         <el-button type="success" class="w-100" @click="handleRegister" :loading="loading">
           立即注册
         </el-button>
@@ -54,10 +58,19 @@ const regForm = reactive({
   phone: ''
 })
 
+const phoneReg = /^1[3-9]\d{9}$/;
+const emailReg = /^[\w-]+(\.[\w-]+)*@[\w-]+(\.[\w-]+)+$/;
+
 // 表单校验规则
 const rules = {
-  username: [{ required: true, message: '用户名不能为空', trigger: 'blur' }],
-  password: [{ required: true, message: '密码不能为空', trigger: 'blur' }, { min: 6, message: '密码至少6位', trigger: 'blur' }],
+  username: [
+    { required: true, message: '用户名不能为空', trigger: 'blur' },
+    { min: 3, message: '用户名至少3位', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '密码不能为空', trigger: 'blur' },
+    { min: 6, message: '密码至少6位', trigger: 'blur' }
+  ],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {
@@ -68,11 +81,16 @@ const rules = {
       trigger: 'blur'
     }
   ],
-  phone: [{ required: true, message: '手机号不能为空', trigger: 'blur' }]
+  phone: [
+    { required: true, message: '手机号不能为空', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位手机号', trigger: 'blur' }
+  ],
+  email: [
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: ['blur', 'change'] }
+  ]
 }
 
 const handleRegister = async () => {
-  // 校验表单
   await regFormRef.value.validate(async (valid) => {
     if (!valid) return
 
@@ -81,17 +99,19 @@ const handleRegister = async () => {
       const res = await request.post('/api/customer/register', {
         username: regForm.username,
         password: regForm.password,
-        phone: regForm.phone
+        phone: regForm.phone,
+        email: regForm.email // 确保这里传递了 email
       })
 
       if (res.success) {
-        ElMessage.success('注册成功！正在跳转登录...')
+        ElMessage.success('注册成功！')
         setTimeout(() => router.push('/login'), 1500)
       } else {
+        // 这里会自动捕获后端 Service 抛出的 "该用户名已被注册"
         ElMessage.error(res.message)
       }
     } catch (error) {
-      ElMessage.error('网络错误，注册失败')
+      ElMessage.error('注册异常，请稍后再试')
     } finally {
       loading.value = false
     }

@@ -79,6 +79,8 @@
                 @click="openFaultDialog(scope.row)"
               >故障上报</el-button>
 
+              <el-button size="small" type="danger" plain @click="openRevokeDialog(scope.row.id)">撤销报告</el-button>
+
               <el-button
                 type="success"
                 size="small"
@@ -149,7 +151,7 @@
     <el-dialog v-model="faultVisible" title="反馈车辆故障隐患" width="600px">
       <el-form :model="faultForm" label-width="100px">
         <el-form-item label="建议维修">
-          <el-select v-model="faultForm.itemId" placeholder="请选择建议修复的项目" style="width: 100%" @change="handleItemChange">
+          <el-select v-model="faultForm.itemIds" placeholder="请选择建议修复的项目" style="width: 100%" @change="handleItemChange" multiple collapse-tags>
             <el-option
               v-for="item in repairItems"
               :key="item.id"
@@ -190,6 +192,17 @@
         <el-button type="primary" @click="submitFault" :loading="submitting">确认上报</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="revokeVisible" title="已上报隐患（待确认）" width="500px">
+      <el-table :data="reportedFaults" size="small">
+        <el-table-column prop="itemName" label="建议项目" />
+        <el-table-column prop="status" label="状态" width="100" />
+        <el-table-column label="操作" width="80">
+          <template #default="scope">
+            <el-button link style="color: #f56c6c" @click="handleRevoke(scope.row.id)">撤销</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -217,8 +230,8 @@ const uploadHeaders = computed(() => ({
 }));
 
 const faultForm = ref({
-  itemId: null,
-  itemName: '',
+  itemIds: [],
+  itemNames: [],
   workerRemark: '',
   urgencyLevel: 1
 })
@@ -247,15 +260,48 @@ const processingOrders = computed(() => allOrders.value.filter(o => o.status ===
 const finishedOrders = computed(() => allOrders.value.filter(o => o.status === '已完成' && o.workerName === currentWorkerIdentifier.value))
 
 const handleUpdate = async (id, status) => {
+  // 1. 仅在点击“完成”时拦截
+  if (status === '已完成') {
+    try {
+      const faultRes = await request.get(`/api/faults/findByAppointment/${id}`)
+
+      if (faultRes.success && faultRes.data) {
+        const data = faultRes.data;
+        // 只要有一条是“待确认”，就弹出提醒
+        const hasPending = Array.isArray(data)
+          ? data.some(f => f.status === '待确认')
+          : data.status === '待确认';
+
+        if (hasPending) {
+          return ElMessageBox.alert(
+            '用户还未确认新增服务，请联系用户处理或撤销建议。',
+            '操作受阻',
+            { confirmButtonText: '确定', type: 'warning' }
+          )
+        }
+      }
+    } catch (error) {
+      console.error('状态校验失败', error)
+    }
+  }
+
+  // 2. 原有的更新状态逻辑
   const res = await request.post('/api/appointment/updateStatus', {
-    id: id, status: status, workerName: currentWorkerIdentifier.value, workerId: user.value.id
+    id: id,
+    status: status,
+    workerName: currentWorkerIdentifier.value,
+    workerId: user.value.id
   })
-  if (res.success) { ElMessage.success('操作成功'); loadData(); }
+
+  if (res.success) {
+    ElMessage.success('操作成功');
+    loadData();
+  }
 }
 
 const openFaultDialog = async (row) => {
   currentOrder.value = row
-  faultForm.value = { itemId: null, itemName: '', workerRemark: '', urgencyLevel: 1 }
+  faultForm.value = { itemIds: [], itemNames: [], workerRemark: '', urgencyLevel: 1 }
   fileList.value = []
   uploadedAttachmentIds.value = []
 
@@ -292,14 +338,18 @@ const handleRemove = (uploadFile) => {
   }
 }
 
-const handleItemChange = (val) => {
-  const selected = repairItems.value.find(i => i.id === val)
-  if (selected) faultForm.value.itemName = selected.name
+const handleItemChange = (valArray) => {
+  // valArray 是 el-select 传回的选中的 ID 数组
+  const selectedNames = valArray.map(id => {
+    const item = repairItems.value.find(i => i.id === id)
+    return item ? item.name : ''
+  })
+  faultForm.value.itemNames = selectedNames
 }
 
 // 核心修改：修复 Missing catch or finally 语法错误并增强反馈
 const submitFault = async () => {
-  if (!faultForm.value.itemId) return ElMessage.warning('请选择建议的维修项目')
+  if (faultForm.value.itemIds.length === 0) return ElMessage.warning('请至少选择一个建议维修项目')
   if (!faultForm.value.workerRemark) return ElMessage.warning('请输入发现的问题描述')
 
   submitting.value = true
@@ -310,8 +360,8 @@ const submitFault = async () => {
       workerName: currentWorkerIdentifier.value,
       customerId: currentOrder.value.customerId,
       customerName: currentOrder.value.customerName,
-      itemId: faultForm.value.itemId,
-      itemName: faultForm.value.itemName,
+      itemId: faultForm.value.itemIds.join(','),
+      itemName: faultForm.value.itemNames.join(','),
       workerRemark: faultForm.value.workerRemark,
       urgencyLevel: faultForm.value.urgencyLevel,
       attachmentIds: uploadedAttachmentIds.value
@@ -371,6 +421,46 @@ const handleStatusChange = async (newStatus) => {
   } catch (error) {
     ElMessage.error('网络错误，状态同步失败')
   }
+}
+
+// 控制撤销弹窗
+const revokeVisible = ref(false)
+const reportedFaults = ref([])
+
+// 打开撤销列表：获取当前订单下所有隐患
+const openRevokeDialog = async (appointmentId) => {
+  try {
+    const res = await request.get(`/api/faults/findByAppointment/${appointmentId}`)
+    if (res.success && res.data) {
+      // 过滤：只有“待确认”的才能撤销（客户已处理的不能撤销）
+      const list = Array.isArray(res.data) ? res.data : [res.data]
+      reportedFaults.value = list.filter(f => f.status === '待确认')
+
+      if (reportedFaults.value.length === 0) {
+        return ElMessage.info('暂无待确认的可撤销记录')
+      }
+      revokeVisible.value = true
+    }
+  } catch (error) {
+    ElMessage.error('获取报告列表失败')
+  }
+}
+
+// 执行撤销删除
+const handleRevoke = (faultId) => {
+  ElMessageBox.confirm('确定要撤销这条故障上报吗？', '提示', {
+    type: 'warning',
+    confirmButtonText: '确定撤销'
+  }).then(async () => {
+    const res = await request.delete(`/api/faults/delete/${faultId}`)
+    if (res.success) {
+      ElMessage.success('撤销成功')
+      // 刷新列表
+      reportedFaults.value = reportedFaults.value.filter(f => f.id !== faultId)
+      if (reportedFaults.value.length === 0) revokeVisible.value = false
+      loadData()
+    }
+  })
 }
 
 const handleLogout = () => {

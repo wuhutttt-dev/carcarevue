@@ -15,8 +15,8 @@
             style="width: 100%"
           >
             <el-option label="顾客" value="用户" />
-            <el-option label="管理员" value="管理员" />
-            <el-option label="工作人员" value="工作人员" />
+            <el-option label="服务顾问" value="管理员" />
+            <el-option label="维修技师" value="工作人员" />
           </el-select>
         </el-form-item>
 

@@ -11,27 +11,58 @@
         <el-input v-model="form.carModel" placeholder="例如：奥迪Q7" />
       </el-form-item>
 
-      <el-form-item label="服务项目">
-        <el-select
-          v-model="form.serviceType"
-          placeholder="请选择项目（已为您匹配适用项目）"
-          style="width: 100%"
-          v-loading="loadingServices"
-          multiple
-          collapse-tags
-          collapse-tags-tooltip
-        >
-          <el-option
-            v-for="item in filteredServiceOptions"
-            :key="item.id"
-            :label="item.name"
-            :value="item.name"
-          >
-            <span class="option-name">{{ item.name }}</span>
-            <el-tag size="small" effect="plain" style="margin-left: 8px">{{ item.vehicleType }}</el-tag>
-            <span class="option-price">¥{{ item.price }}</span>
-          </el-option>
-        </el-select>
+      <el-form-item label="服务类别">
+        <el-tabs v-model="activeTab" type="border-card" style="width: 100%" @tab-change="handleTabChange">
+
+          <el-tab-pane label="维修保养" name="repair">
+            <div class="tab-content">
+              <p class="tab-tip">常规保养、机油滤芯、刹车系统等维修服务</p>
+              <el-select
+                v-model="form.serviceType"
+                placeholder="可选择项目，也可到店后再咨询"
+                style="width: 100%"
+                multiple
+                collapse-tags
+                clearable
+              >
+                <el-option
+                  v-for="item in repairServices"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.name"
+                >
+                  <span class="option-name">{{ item.name }}</span>
+                  <span class="option-price">¥{{ item.price }}</span>
+                </el-option>
+              </el-select>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="汽车美容" name="beauty">
+            <div class="tab-content">
+              <p class="tab-tip">洗车、打蜡、镀晶、隐形车衣等美容服务</p>
+              <el-select
+                v-model="form.serviceType"
+                placeholder="挑选您心仪的美容项目"
+                style="width: 100%"
+                multiple
+                collapse-tags
+                clearable
+              >
+                <el-option
+                  v-for="item in beautyServices"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.name"
+                >
+                  <span class="option-name">{{ item.name }}</span>
+                  <span class="option-price">¥{{ item.price }}</span>
+                </el-option>
+              </el-select>
+            </div>
+          </el-tab-pane>
+
+        </el-tabs>
       </el-form-item>
 
       <el-form-item label="预约时间">
@@ -55,6 +86,20 @@
           placeholder="如有特殊需求请备注"
         />
       </el-form-item>
+
+      <div class="selected-items-tags" v-if="form.serviceType.length > 0">
+        <div class="tag-title">已选清单：</div>
+        <el-tag
+          v-for="tag in form.serviceType"
+          :key="tag"
+          closable
+          disable-transitions
+          @close="handleRemoveTag(tag)"
+          class="service-tag"
+        >
+          {{ tag }}
+        </el-tag>
+      </div>
 
       <div v-if="form.serviceType.length > 0" class="checkout-panel">
         <div class="checkout-row">
@@ -117,6 +162,41 @@ const loading = ref(false)
 const loadingServices = ref(false)
 const serviceOptions = ref([])
 const userVehicleType = ref('') // [新增] 用于存储当前用户的车型
+
+const activeTab = ref('repair') // 默认显示维修保养
+const repairServices = computed(() => {
+  return filteredServiceOptions.value.filter(item => item.category !== 'beauty')
+})
+
+// 2. 过滤：美容项目（category 为 beauty 的）
+const beautyServices = computed(() => {
+  return filteredServiceOptions.value.filter(item => item.category === 'beauty')
+})
+
+/**
+ * 移除已选的服务标签
+ * @param tag 要移除的服务名称
+ */
+const handleRemoveTag = (tag) => {
+  console.log('触发移除:', tag);
+  // reactive 对象直接访问属性，不需要 .value
+  if (form.serviceType) {
+    // 过滤掉选中的标签
+    const newTags = form.serviceType.filter(item => item !== tag);
+    // 直接赋值给 reactive 的属性
+    form.serviceType = newTags;
+
+    // 因为你的计价逻辑是写在 computed (billing) 里的，
+    // 所以这里不需要手动调用 calculatePrice，价格会自动随 form.serviceType 的改变而刷新
+  }
+}
+
+const handleTabChange = (name) => {
+  // 不再清空，允许跨页面多选
+  console.log('当前分类：', name)
+}
+
+
 
 const form = reactive({
   carModel: '',
@@ -300,7 +380,7 @@ const submit = async () => {
   const userStr = localStorage.getItem('user')
   const user = JSON.parse(userStr)
 
-  if (!form.carModel || form.serviceType.length === 0 || !form.appointmentTime) {
+  if (!form.carModel || !form.appointmentTime) {
     ElMessage.warning('请补全预约必填信息')
     return
   }
@@ -500,5 +580,35 @@ onMounted(() => {
 }
 .submit-btn {
   width: 180px;
+}
+
+.tab-content {
+  padding: 10px 0;
+}
+.tab-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+:deep(.el-tabs--border-card) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.selected-items-tags {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 4px;
+}
+.tag-title {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+.service-tag {
+  margin-right: 8px;
+  margin-bottom: 8px;
 }
 </style>
