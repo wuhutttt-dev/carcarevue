@@ -73,6 +73,14 @@
           <el-table-column prop="appointmentTime" label="开始时间" width="180" />
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="scope">
+
+              <el-button
+                type="primary"
+                size="small"
+                plain
+                @click="openConsumptionDialog(scope.row)"
+              >配件消耗</el-button>
+
               <el-button
                 type="warning"
                 size="small"
@@ -202,6 +210,47 @@
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+    <el-dialog v-model="consumptionVisible" title="登记配件消耗" width="700px">
+      <div style="margin-bottom: 15px;">
+        <el-select
+          v-model="selectedPartId"
+          filterable
+          remote
+          placeholder="搜索并选择配件 (支持名称/编号)"
+          :remote-method="searchParts"
+          @change="addPartToList"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="item in inventoryParts"
+            :key="item.id"
+            :label="`${item.name} (${item.brand}) - 库存:${item.stock}`"
+            :value="item.id"
+            :disabled="item.stock <= 0"
+          />
+        </el-select>
+      </div>
+
+      <el-table :data="consumptionList" border size="small">
+        <el-table-column prop="name" label="配件名称" />
+        <el-table-column prop="brand" label="品牌" width="100" />
+        <el-table-column label="消耗数量" width="150">
+          <template #default="scope">
+            <el-input-number v-model="scope.row.quantity" :min="1" :max="scope.row.maxStock" size="small" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80">
+          <template #default="scope">
+            <el-button type="danger" link @click="consumptionList.splice(scope.$index, 1)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="consumptionVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitConsumption" :loading="submittingConsumption">确认消耗</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -468,6 +517,89 @@ const handleLogout = () => {
     localStorage.clear()
     location.href = '/login'
   }).catch(() => {})
+}
+
+// --- 在 <script setup> 中新增响应式变量 ---
+const consumptionVisible = ref(false)
+const submittingConsumption = ref(false)
+const inventoryParts = ref([])       // 库存备选列表
+const selectedPartId = ref(null)     // 下拉框当前选择
+const consumptionList = ref([])      // 已选中的消耗清单
+const currentConsumptionOrder = ref(null) // 当前操作的工单
+
+// --- 新增逻辑函数 ---
+
+// 1. 打开弹窗并加载库存数据
+const openConsumptionDialog = async (row) => {
+  currentConsumptionOrder.value = row
+  consumptionList.value = []
+  consumptionVisible.value = true
+  // 初始加载前10条库存记录
+  searchParts('')
+}
+
+// 2. 搜索库存配件 (复用 PartsPurchase 的接口逻辑)
+const searchParts = async (query) => {
+  try {
+    const res = await request.get('/api/parts', { params: { name: query } })
+    if (res.success) {
+      inventoryParts.value = res.data
+    }
+  } catch (err) {
+    console.error('获取配件失败', err)
+  }
+}
+
+// 3. 将选择的配件添加到待消耗列表
+const addPartToList = (partId) => {
+  const part = inventoryParts.value.find(p => p.id === partId)
+  if (part) {
+    // 检查是否已在列表中
+    const exists = consumptionList.value.find(item => item.partId === partId)
+    if (exists) {
+      return ElMessage.warning('该配件已在列表中')
+    }
+    consumptionList.value.push({
+      partId: part.id,
+      name: part.name,
+      brand: part.brand,
+      quantity: 1,
+      maxStock: part.stock // 记录最大库存用于校验
+    })
+  }
+  selectedPartId.value = null // 清空选择框
+}
+
+// 4. 提交消耗数据到后端
+const submitConsumption = async () => {
+  if (consumptionList.value.length === 0) return ElMessage.warning('请至少选择一个配件')
+
+  submittingConsumption.value = true
+  try {
+    const postData = {
+      appointmentId: currentConsumptionOrder.value.id,
+      workerId: user.value.id,
+      items: consumptionList.value.map(item => ({
+        partId: item.partId,
+        quantity: item.quantity
+      }))
+    }
+
+    // 假设后端提供该接口用于处理配件出库和费用关联
+    const res = await request.post('/api/parts/consume', postData)
+
+    if (res.success) {
+      ElMessage.success('配件消耗记录成功，库存已更新')
+      consumptionVisible.value = false
+      loadData() // 刷新页面数据
+    } else {
+      ElMessage.error(res.message || '提交失败')
+    }
+  } catch (error) {
+    ElMessage.error('系统异常')
+  } finally {
+    submittingConsumption.value = false
+  }
 }
 
 onMounted(loadData)
