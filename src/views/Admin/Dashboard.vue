@@ -1,21 +1,28 @@
 <template>
   <div class="dashboard-container">
     <el-row :gutter="20" class="stat-row">
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card shadow="hover" class="card-gradient blue">
           <div class="label">累计营业额</div>
           <div class="value">¥ {{ stats.totalRevenue || 0 }}</div>
           <el-icon class="card-icon"><Money /></el-icon>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
+        <el-card shadow="hover" class="card-gradient purple">
+          <div class="label">采购配件金额</div>
+          <div class="value">¥ {{ Number(stats.totalPartCost || 0).toFixed(2) }}</div>
+          <el-icon class="card-icon"><Goods /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
         <el-card shadow="hover" class="card-gradient green">
           <div class="label">总订单量</div>
           <div class="value">{{ stats.totalOrders || 0 }} 单</div>
           <el-icon class="card-icon"><Document /></el-icon>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card shadow="hover" class="card-gradient orange">
           <div class="label">活跃客户数</div>
           <div class="value">{{ userCount }} 位</div>
@@ -44,12 +51,17 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Money, Document, User } from '@element-plus/icons-vue'
+import { Money, Document, User, Goods } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 
-const stats = ref({ totalRevenue: 0, totalOrders: 0, statusCounts: {} })
+const stats = ref({
+  totalRevenue: 0,
+  totalOrders: 0,
+  totalPartCost: 0,
+  statusCounts: {}
+})
 const userCount = ref(0)
 const pieChartRef = ref(null)
 
@@ -61,6 +73,14 @@ const fetchData = async () => {
       stats.value = res.data
       renderChart(res.data.statusCounts)
     }
+
+    // 2. 【新增】从采购模块接口获取配件支出金额
+    // 这里参考了你 PartsPurchase.vue 中的接口路径
+    const purchaseRes = await request.get('/api/purchase-orders/stats/monthly-expenditure')
+    if (purchaseRes.success) {
+       stats.value.totalPartCost = purchaseRes.data || 0
+    }
+
     const userRes = await request.get('/api/customer/listAll')
     if (userRes.success) userCount.value = userRes.data.length
   } catch (error) {
@@ -97,6 +117,10 @@ onMounted(fetchData)
 .blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
 .green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
 .orange { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+/* 新增紫色渐变背景 */
+.purple {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
 .label { font-size: 14px; opacity: 0.9; }
 .value { font-size: 28px; font-weight: bold; margin-top: 10px; }
 .card-icon { position: absolute; right: 20px; bottom: 20px; font-size: 50px; opacity: 0.3; }
