@@ -50,6 +50,13 @@ const routes = [
         name: 'AdminStaff',
         component: () => import('@/views/Admin/StaffManagement.vue'),
         meta: { title: '员工档案管理' }
+      },
+      // --- 新增：配件采购管理路由 ---
+      {
+        path: 'parts-purchase', // 这里对应 AdminLayout.vue 中的 index="/admin/parts-purchase"
+        name: 'AdminPartsPurchase',
+        component: () => import('@/views/Admin/PartsPurchase.vue'), // 需确保创建该文件
+        meta: { title: '配件采购管理' }
       }
     ]
   },

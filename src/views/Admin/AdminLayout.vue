@@ -10,6 +10,10 @@
         <el-menu-item index="/admin/orders"><el-icon><List /></el-icon><span>预约订单处理</span></el-menu-item>
         <el-menu-item index="/admin/services"><el-icon><Tools /></el-icon><span>服务项目维护</span></el-menu-item>
         <el-menu-item index="/admin/users"><el-icon><User /></el-icon><span>客户档案中心</span></el-menu-item>
+        <el-menu-item index="/admin/parts-purchase">
+          <el-icon><ShoppingCart /></el-icon>
+          <span>配件采购管理</span>
+        </el-menu-item>
         <el-menu-item index="/admin/staff">
           <el-icon><Avatar /></el-icon>
           <span>员工档案管理</span>
@@ -107,7 +111,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus} from '@element-plus/icons-vue'
+import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus, ShoppingCart} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -140,7 +144,14 @@ const editForm = ref({
 })
 
 const currentPageName = computed(() => {
-  const map = { '/admin/dashboard': '数据统计概览', '/admin/orders': '预约订单处理', '/admin/services': '服务项目维护', '/admin/users': '客户档案中心' }
+  const map = {
+    '/admin/dashboard': '数据统计概览',
+    '/admin/orders': '预约订单处理',
+    '/admin/services': '服务项目维护',
+    '/admin/users': '客户档案中心',
+    '/admin/staff': '员工档案管理', // 补上原先遗漏的员工档案
+    '/admin/parts-purchase': '配件采购管理' // 新增的汽车配件采购路由
+  }
   return map[route.path] || '后台管理'
 })
 
