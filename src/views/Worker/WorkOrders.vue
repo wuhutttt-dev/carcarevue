@@ -572,31 +572,35 @@ const addPartToList = (partId) => {
 
 // 4. 提交消耗数据到后端
 const submitConsumption = async () => {
-  if (consumptionList.value.length === 0) return ElMessage.warning('请至少选择一个配件')
+  if (consumptionList.value.length === 0) {
+    ElMessage.warning('请选择要消耗的配件')
+    return
+  }
 
   submittingConsumption.value = true
   try {
     const postData = {
-      appointmentId: currentConsumptionOrder.value.id,
-      workerId: user.value.id,
+      appointmentId: currentConsumptionOrder.value.id, // 对应 Appointment 表 ID
+      workerId: user.value.id,                        // 当前登录技师 ID
       items: consumptionList.value.map(item => ({
-        partId: item.partId,
+        partId: item.partId,   // 必须与 PartConsumptionReq.PartItem 字段一致
         quantity: item.quantity
       }))
     }
 
-    // 假设后端提供该接口用于处理配件出库和费用关联
-    const res = await request.post('/api/parts/consume', postData)
-
+    // 调用你新建的 Controller 接口
+    const res = await request.post('/api/part-consumption/submit', postData)
     if (res.success) {
-      ElMessage.success('配件消耗记录成功，库存已更新')
+      ElMessage.success('配件领取/消耗记录成功，库存已更新')
       consumptionVisible.value = false
-      loadData() // 刷新页面数据
+      // 刷新列表以显示最新的库存状态（如果有的话）
+      loadData()
     } else {
-      ElMessage.error(res.message || '提交失败')
+      ElMessage.error(res.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error('系统异常')
+    console.error("配件消耗提交异常:", error)
+    ElMessage.error('系统异常，请稍后再试')
   } finally {
     submittingConsumption.value = false
   }
