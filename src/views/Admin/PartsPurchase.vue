@@ -89,11 +89,25 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="拟定供应商" width="160">
+        <el-table-column label="拟定供应商" width="200">
           <template #default="scope">
-            <span :style="{ color: matchSupplier(scope.row.brand) ? '#67C23A' : '#F56C6C' }">
+            <div v-if="scope.row.partId" :style="{ color: matchSupplier(scope.row.brand) ? '#67C23A' : '#F56C6C' }">
               {{ matchSupplier(scope.row.brand)?.name || '未找到匹配供应商' }}
-            </span>
+            </div>
+            <el-select
+              v-else
+              v-model="scope.row.supplierId"
+              placeholder="请选择供应商"
+              size="small"
+              filterable
+            >
+              <el-option v-for="s in suppliers" :key="s.id" :label="s.name" :value="s.id" />
+              <template #footer>
+                <el-button type="primary" size="small" text @click="openAddSupplierDialog(scope.$index)">
+                  + 新增供应商
+                </el-button>
+              </template>
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="数量" width="120">
@@ -123,11 +137,31 @@
         </div>
       </template>
     </el-dialog>
+    <el-dialog v-model="supplierDialogVisible" title="新增供应商" width="450px" append-to-body>
+      <el-form :model="supplierForm" label-width="100px" ref="supplierFormRef" :rules="supplierRules">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="supplierForm.name" placeholder="请输入供应商全称" />
+        </el-form-item>
+        <el-form-item label="联系人" prop="contact">
+          <el-input v-model="supplierForm.contact" />
+        </el-form-item>
+        <el-form-item label="电话" prop="phone">
+          <el-input v-model="supplierForm.phone" />
+        </el-form-item>
+        <el-form-item label="地址" prop="address">
+          <el-input v-model="supplierForm.address" type="textarea" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="supplierDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitNewSupplier" :loading="supplierLoading">保存并选中</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { Search, Plus, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
@@ -144,6 +178,44 @@ const purchaseOrder = ref({ items: [] })
 
 // 修改点：新增本月支出响应式变量
 const monthlyExpenditure = ref(0.0)
+
+// --- 新增响应式变量 ---
+const supplierDialogVisible = ref(false)
+const supplierLoading = ref(false)
+const currentEditIndex = ref(-1) // 记录是哪一行在触发新增供应商
+const supplierForm = reactive({ name: '', contact: '', phone: '', address: '' })
+const supplierRules = {
+  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
+  contact: [{ required: true, message: '请输入联系人', trigger: 'blur' }]
+}
+// 打开新增供应商弹窗
+const openAddSupplierDialog = (index) => {
+  currentEditIndex.value = index
+  Object.assign(supplierForm, { name: '', contact: '', phone: '', address: '' })
+  supplierDialogVisible.value = true
+}
+// 提交新供应商
+const submitNewSupplier = async () => {
+  supplierLoading.value = true
+  try {
+    const res = await request.post('/api/suppliers', supplierForm)
+    if (res.success) {
+      ElMessage.success('供应商添加成功')
+      await fetchSuppliers() // 刷新供应商列表
+
+      // 自动把刚添加的供应商 ID 绑定到当前行
+      const newSupplier = suppliers.value.find(s => s.name === supplierForm.name)
+      if (newSupplier && currentEditIndex.value !== -1) {
+        purchaseOrder.value.items[currentEditIndex.value].supplierId = newSupplier.id
+        // 如果是新增配件，把品牌同步为供应商名称（可选）
+        purchaseOrder.value.items[currentEditIndex.value].brand = newSupplier.name
+      }
+      supplierDialogVisible.value = false
+    }
+  } finally {
+    supplierLoading.value = false
+  }
+}
 
 // --- 数据加载 ---
 const fetchPartsData = async () => {
@@ -216,51 +288,95 @@ const submitPurchaseOrder = async () => {
   const items = purchaseOrder.value.items
   if (items.length === 0) return
 
+  // 用于存放按供应商ID分组的采购项
   const ordersMap = new Map()
 
+  // 1. 数据校验与分组逻辑
   for (const item of items) {
-    if (!item.brand || !item.partName || !item.code) {
-      return ElMessage.warning(`配件 ${item.partName || '未命名'} 信息不完整`)
+    // A. 基础非空校验
+    if (!item.partName || !item.code || (!item.partId && !item.brand)) {
+      return ElMessage.warning(`配件 ${item.partName || '未命名'} 的信息不完整（编号、名称、品牌必填）`)
     }
-    const supplier = matchSupplier(item.brand)
-    if (!supplier) {
-      return ElMessage.error(`未找到品牌 "${item.brand}" 对应的供应商。`)
+
+    // B. 重复性校验 (仅针对新配件：即没有 partId 的项)
+    if (!item.partId) {
+      // 校验1：是否与数据库中已有的配件冲突
+      const isExistInDb = partsData.value.some(
+        p => p.code === item.code || p.name === item.partName
+      )
+      if (isExistInDb) {
+        return ElMessage.error(`新增失败：编号[${item.code}]或名称[${item.partName}]在系统中已存在`)
+      }
+
+      // 校验2：校验本次采购清单内部是否有相互重复的项 (防止一次录入两个同样的新编号)
+      const internalDuplicates = items.filter(
+        i => i.code === item.code || i.partName === item.partName
+      ).length
+      if (internalDuplicates > 1) {
+        return ElMessage.error(`采购清单中存在重复的新配件信息：${item.partName}`)
+      }
     }
-    if (!ordersMap.has(supplier.id)) {
-      ordersMap.set(supplier.id, [])
+
+    // C. 确定供应商 ID
+    let finalSupplierId = null
+
+    if (item.partId) {
+      // 已有配件：根据品牌自动匹配供应商
+      const supplier = matchSupplier(item.brand)
+      if (!supplier) {
+        return ElMessage.error(`未找到品牌 "${item.brand}" 对应的供应商，请先在供应商管理中配置`)
+      }
+      finalSupplierId = supplier.id
+    } else {
+      // 新增配件：使用下拉菜单选择或新增后绑定的 supplierId
+      if (!item.supplierId) {
+        return ElMessage.error(`请为新配件 "${item.partName}" 选择一个供应商`)
+      }
+      finalSupplierId = item.supplierId
     }
-    ordersMap.get(supplier.id).push(item)
+
+    // D. 按供应商归类分组
+    if (!ordersMap.has(finalSupplierId)) {
+      ordersMap.set(finalSupplierId, [])
+    }
+    ordersMap.get(finalSupplierId).push(item)
   }
 
+  // 2. 提交逻辑
   try {
     await ElMessageBox.confirm(
-      `系统将按品牌自动生成 ${ordersMap.size} 份采购单并直接增加库存。确认执行？`,
+      `系统将按供应商自动拆分为 ${ordersMap.size} 份采购单并更新库存。确认执行？`,
       '入库确认'
-    );
+    )
 
-    submitting.value = true;
-    const requests = [];
+    submitting.value = true
+    const requests = []
+
+    // 遍历 Map，为每个供应商发起一个 POST 请求
     ordersMap.forEach((groupItems, sId) => {
       requests.push(request.post('/api/purchase-orders', {
         supplierId: sId,
         items: groupItems
-      }));
-    });
+      }))
+    })
 
-    await Promise.all(requests);
+    await Promise.all(requests)
 
-    ElMessage.success('采购成功，库存与支出已更新！');
-    dialogVisible.value = false;
-    multipleSelection.value = [];
-    
-    // 成功后同时刷新列表和统计支出
-    fetchPartsData();
-    fetchMonthlyStats(); 
+    ElMessage.success('采购成功，库存与支出已更新！')
+    dialogVisible.value = false
+    multipleSelection.value = []
+
+    // 3. 刷新数据
+    fetchPartsData()     // 刷新配件列表（此时新配件应已出现在列表中）
+    fetchMonthlyStats()   // 刷新本月支出统计
 
   } catch (err) {
-    if (err !== 'cancel') ElMessage.error('入库提交失败');
+    if (err !== 'cancel') {
+      console.error('提交失败:', err)
+      ElMessage.error('入库提交失败，请检查网络或后端服务')
+    }
   } finally {
-    submitting.value = false;
+    submitting.value = false
   }
 }
 
