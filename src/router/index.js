@@ -57,6 +57,18 @@ const routes = [
         name: 'AdminPartsPurchase',
         component: () => import('@/views/Admin/PartsPurchase.vue'), // 需确保创建该文件
         meta: { title: '配件采购管理' }
+      },
+      {
+        path: 'parts-consumption',
+        name: 'AdminPartsConsumption',
+        component: () => import('@/views/Admin/PartsConsumption.vue'),
+        meta: { title: '配件消耗记录' }
+      },
+      {
+        path: 'suppliers',
+        name: 'SupplierManagement',
+        component: () => import('@/views/Admin/SupplierManagement.vue'),
+        meta: { title: '供应商管理' }
       }
     ]
   },

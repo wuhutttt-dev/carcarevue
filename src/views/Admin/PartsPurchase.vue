@@ -56,9 +56,11 @@
         <el-table-column prop="price" label="参考单价" width="110">
           <template #default="scope">¥{{ scope.row.price }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="scope">
             <el-button size="small" type="primary" link @click="openSinglePurchaseDialog(scope.row)">采购</el-button>
+            <el-button size="small" type="warning" link @click="openEditDialog(scope.row)">修改</el-button>
+            <el-button size="small" type="danger" link @click="handleDeletePart(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -157,6 +159,50 @@
         <el-button type="primary" @click="submitNewSupplier" :loading="supplierLoading">保存并选中</el-button>
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="editDialogVisible"
+      title="修改配件信息"
+      width="500px"
+    >
+      <el-form :model="editForm" label-width="100px">
+
+        <el-form-item label="配件编号">
+          <el-input v-model="editForm.code" />
+        </el-form-item>
+
+        <el-form-item label="配件名称">
+          <el-input v-model="editForm.name" />
+        </el-form-item>
+
+        <el-form-item label="分类">
+          <el-select v-model="editForm.category">
+            <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="品牌">
+          <el-input v-model="editForm.brand" />
+        </el-form-item>
+
+        <el-form-item label="当前库存">
+          <el-tag :type="editForm.stock < 10 ? 'danger' : 'success'">
+            {{ editForm.stock }}
+          </el-tag>
+        </el-form-item>
+
+        <el-form-item label="单价">
+          <el-input-number v-model="editForm.price" :min="0" :step="0.1" />
+        </el-form-item>
+
+      </el-form>
+
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitEdit" :loading="editLoading">
+          保存修改
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -198,7 +244,7 @@ const openAddSupplierDialog = (index) => {
 const submitNewSupplier = async () => {
   supplierLoading.value = true
   try {
-    const res = await request.post('/api/suppliers', supplierForm)
+    const res = await request.post('/api/suppliers/add', supplierForm)
     if (res.success) {
       ElMessage.success('供应商添加成功')
       await fetchSuppliers() // 刷新供应商列表
@@ -219,8 +265,15 @@ const submitNewSupplier = async () => {
 
 // --- 数据加载 ---
 const fetchPartsData = async () => {
-  const res = await request.get('/api/parts')
-  if (res.success) partsData.value = res.data || []
+  try {
+    // 确保你的路径是 /api/parts/list
+    const res = await request.get('/api/parts/list')
+    if (res.success) {
+      partsData.value = res.data || []
+    }
+  } catch (error) {
+    console.error('获取配件列表失败:', error)
+  }
 }
 
 const fetchSuppliers = async () => {
@@ -354,7 +407,7 @@ const submitPurchaseOrder = async () => {
 
     // 遍历 Map，为每个供应商发起一个 POST 请求
     ordersMap.forEach((groupItems, sId) => {
-      requests.push(request.post('/api/purchase-orders', {
+      requests.push(request.post('/api/purchase-orders/add', {
         supplierId: sId,
         items: groupItems
       }))
@@ -378,6 +431,75 @@ const submitPurchaseOrder = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const editDialogVisible = ref(false)
+const editLoading = ref(false)
+
+const editForm = reactive({
+  id: null,
+  code: '',
+  name: '',
+  category: '',
+  brand: '',
+  stock: 0,
+  price: 0
+})
+
+const openEditDialog = (row) => {
+  Object.assign(editForm, row)  // 把当前行数据填进去
+  editDialogVisible.value = true
+}
+
+const submitEdit = async () => {
+  try {
+    editLoading.value = true
+
+    const res = await request.put(`/api/parts/update/${editForm.id}`, editForm)
+
+    if (res.success) {
+      ElMessage.success('修改成功')
+      editDialogVisible.value = false
+      fetchPartsData()   // 刷新表格
+    } else {
+      ElMessage.error(res.message || '修改失败')
+    }
+
+  } catch (err) {
+    ElMessage.error('修改失败')
+  } finally {
+    editLoading.value = false
+  }
+}
+
+// 配件删除逻辑
+const handleDeletePart = (row) => {
+  ElMessageBox.confirm(
+    `确定要删除配件 [${row.name}] 吗？如果该配件已有采购记录，可能会导致历史数据异常。`,
+    '警告',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      // 调用后端删除接口
+      const res = await request.delete(`/api/parts/delete/${row.id}`)
+      if (res.success) {
+        ElMessage.success('配件已成功删除')
+        fetchPartsData()    // 刷新列表
+        fetchMonthlyStats() // 刷新统计（如果删除影响了支出显示）
+      } else {
+        ElMessage.error(res.message || '删除失败')
+      }
+    } catch (err) {
+      console.error('删除配件出错:', err)
+      ElMessage.error('服务器错误，无法删除')
+    }
+  }).catch(() => {
+    // 点击取消，不做操作
+  })
 }
 
 onMounted(() => {

@@ -14,9 +14,17 @@
           <el-icon><ShoppingCart /></el-icon>
           <span>配件采购管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/parts-consumption">
+          <el-icon><DocumentChecked /></el-icon>
+          <span>配件消耗记录</span>
+        </el-menu-item>
         <el-menu-item index="/admin/staff">
           <el-icon><Avatar /></el-icon>
           <span>员工档案管理</span>
+        </el-menu-item>
+        <el-menu-item index="/admin/suppliers">
+          <el-icon><OfficeBuilding /></el-icon>
+          <span>供应商管理</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -111,7 +119,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus, ShoppingCart} from '@element-plus/icons-vue'
+import { Monitor, List, Tools, User, CaretBottom, SwitchButton, Odometer, User as UserIcon, Avatar, Plus, ShoppingCart, DocumentChecked, OfficeBuilding} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -150,7 +158,9 @@ const currentPageName = computed(() => {
     '/admin/services': '服务项目维护',
     '/admin/users': '客户档案中心',
     '/admin/staff': '员工档案管理', // 补上原先遗漏的员工档案
-    '/admin/parts-purchase': '配件采购管理' // 新增的汽车配件采购路由
+    '/admin/parts-purchase': '配件采购管理', // 新增的汽车配件采购路由
+    '/admin/parts-consumption': '配件消耗记录', // 新增映射
+    '/admin/suppliers': '供应商管理'
   }
   return map[route.path] || '后台管理'
 })
