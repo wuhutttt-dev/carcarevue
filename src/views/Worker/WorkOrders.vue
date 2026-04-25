@@ -541,7 +541,7 @@ const openConsumptionDialog = async (row) => {
 // 2. 搜索库存配件 (复用 PartsPurchase 的接口逻辑)
 const searchParts = async (query) => {
   try {
-    const res = await request.get('/api/parts', { params: { name: query } })
+    const res = await request.get('/api/parts/list', { params: { name: query } })
     if (res.success) {
       inventoryParts.value = res.data
     }

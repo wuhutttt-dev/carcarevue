@@ -214,17 +214,137 @@ const goToRegister = () => router.push('/register')
 </script>
 
 <style scoped>
-.login-container { display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #74ebd5 0%, #9face6 100%); }
-.login-card { width: 400px; border-radius: 12px; }
-.card-header { text-align: center; font-weight: bold; font-size: 20px; color: #409eff; }
-.w-100 { width: 100%; margin-top: 15px; height: 40px; }
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  /* 使用更有色彩感的明亮渐变，确保一眼就能看出背景色 */
+  background: linear-gradient(135deg, #74ebd5 0%, #9face6 100%);
+  position: relative;
+  overflow: hidden;
+}
 
-/* 人脸识别扫描样式 */
-.face-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
-.video-wrapper { position: relative; width: 300px; height: 225px; background: #000; border-radius: 8px; overflow: hidden; border: 2px solid #409eff; }
-.scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: #409eff; box-shadow: 0 0 8px #409eff; animation: scan 2s infinite linear; }
-@keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+/* 在背景上加两个淡色光晕，让“亮色”更有层次感，不土气 */
+.login-container::before {
+  content: "";
+  position: absolute;
+  width: 40vw;
+  height: 40vw;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  top: -10%;
+  right: -5%;
+  filter: blur(80px);
+}
 
-.login-footer { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.register-link { font-size: 14px; color: #606266; }
+/* 2. 卡片优化：纯白悬浮感 */
+.login-card {
+  width: 420px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: none;
+  /* 关键：深色柔和投影，让白色卡片在亮色背景上立起来 */
+  box-shadow: 0 20px 40px rgba(31, 76, 107, 0.15);
+}
+
+/* 3. 标题 */
+.card-header {
+  text-align: center;
+  padding: 10px 0;
+}
+.card-header span {
+  font-size: 24px;
+  font-weight: 800;
+  color: #333;
+  /* 加上一点文字间距 */
+  letter-spacing: 2px;
+}
+
+/* 4. 输入框 */
+:deep(.el-input__wrapper) {
+  background-color: #fff !important;
+  border-radius: 10px;
+  padding: 5px 15px;
+  transition: all 0.3s;
+}
+
+/* 5. 按钮：使用明亮的科技蓝 */
+.w-100 {
+  width: 100%;
+  margin-top: 20px;
+  height: 48px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  border: none;
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%) !important;
+  color: white;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+  cursor: pointer;
+}
+
+.w-100:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(79, 172, 254, 0.6);
+}
+
+/* 6. 人脸识别区 */
+.face-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 300px; /* 容器宽度 */
+  height: 225px; /* 容器高度，符合 4:3 比例 */
+  background: #000;
+  border-radius: 15px;
+  overflow: hidden;
+  border: 4px solid #fff;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  /* 确保内部元素不撑开容器 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 核心修复：强制 video 铺满且居中 */
+video {
+  width: 100% !important;
+  height: 100% !important;
+  /* object-fit: cover 保证视频像背景图一样充满框，不留白边 */
+  object-fit: cover;
+  /* 消除可能的默认间距 */
+  display: block;
+}
+
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: #4facfe;
+  box-shadow: 0 0 10px #4facfe;
+  z-index: 10; /* 确保扫描线在视频上方 */
+  animation: scan 2s infinite linear;
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+/* 7. 底部 */
+.login-footer {
+  margin-top: 25px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
 </style>

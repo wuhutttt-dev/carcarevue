@@ -15,7 +15,8 @@
 
     <el-tabs v-model="activeCategory" @tab-change="handleTabChange" class="category-tabs">
       <el-tab-pane label="保养项目管理" name="maintenance" />
-      <el-tab-pane label="维修项目管理" name="repair" />
+      <el-tab-pane label="维修项目管理"   name="repair" />
+      <el-tab-pane label="美容项目管理"   name="beauty" />
     </el-tabs>
 
     <el-table :data="serviceList" border stripe v-loading="loading" style="margin-top: 15px">
@@ -77,7 +78,8 @@
         <el-form-item label="所属分类">
           <el-select v-model="editForm.category" placeholder="请选择分类" style="width: 100%">
             <el-option label="保养项目" value="maintenance" />
-            <el-option label="维修项目" value="repair" />
+            <el-option label="维修项目"   value="repair" />
+            <el-option label="美容项目"   value="beauty" />
           </el-select>
         </el-form-item>
 
@@ -136,13 +138,13 @@ const serviceList = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
-const activeCategory = ref('maintenance')
+const activeCategory = ref('maintenance')  // 默认还是保养
 
 const uploadHeaders = computed(() => ({
   Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-}));
+}))
 
-// 表单初始状态，已增加 vehicleType 默认值
+// 表单初始状态
 const initialForm = {
   id: null,
   name: '',
@@ -160,7 +162,9 @@ const fetchServices = async () => {
   try {
     const res = await request.get(`/api/service-item/listByCategory?category=${activeCategory.value}`)
     if (res.success) {
-      serviceList.value = res.data
+      serviceList.value = res.data || []
+    } else {
+      ElMessage.error(res.message || '获取列表失败')
     }
   } catch (error) {
     ElMessage.error('获取列表失败')
@@ -174,7 +178,11 @@ const handleTabChange = () => {
 }
 
 const handleAdd = () => {
-  editForm.value = { ...initialForm, category: activeCategory.value }
+  // 新增时，分类跟随当前选中的 tab
+  editForm.value = {
+    ...initialForm,
+    category: activeCategory.value
+  }
   dialogVisible.value = true
 }
 
@@ -188,17 +196,29 @@ const handleUploadSuccess = (response) => {
     editForm.value.imageUrl = response.data
     ElMessage.success('图片上传成功')
   } else {
-    ElMessage.error('上传失败')
+    ElMessage.error('上传失败：' + (response.message || ''))
   }
 }
 
 const beforeUpload = (file) => {
   const isImg = file.type.startsWith('image/')
   if (!isImg) ElMessage.error('只能上传图片文件')
-  return isImg
+  const isLt2M = file.size / 1024 / 1024 < 2
+  if (!isLt2M) ElMessage.error('图片大小不能超过 2MB!')
+  return isImg && isLt2M
 }
 
 const submitUpdate = async () => {
+  // 简单的前端校验（可选加强）
+  if (!editForm.value.name?.trim()) {
+    ElMessage.warning('请输入项目名称')
+    return
+  }
+  if (!editForm.value.category) {
+    ElMessage.warning('请选择所属分类')
+    return
+  }
+
   submitting.value = true
   try {
     const res = await request.post('/api/service-item/update', editForm.value)
@@ -206,19 +226,29 @@ const submitUpdate = async () => {
       ElMessage.success('保存成功')
       dialogVisible.value = false
       fetchServices()
+    } else {
+      ElMessage.error(res.message || '保存失败')
     }
+  } catch (error) {
+    ElMessage.error('保存失败')
   } finally {
     submitting.value = false
   }
 }
 
 const confirmDelete = (row) => {
-  ElMessageBox.confirm(`确定要删除“${row.name}”吗？`, '警告', { type: 'warning' }).then(async () => {
+  ElMessageBox.confirm(`确定要删除“${row.name}”吗？`, '警告', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
     try {
       const res = await request.delete(`/api/service-item/delete/${row.id}`)
       if (res.success) {
         ElMessage.success('已删除')
         fetchServices()
+      } else {
+        ElMessage.error(res.message || '删除失败')
       }
     } catch (error) {
       ElMessage.error('删除失败')
