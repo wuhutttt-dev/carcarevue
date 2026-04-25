@@ -35,6 +35,10 @@
             <el-icon><Histogram /></el-icon>
             <span>服务历史</span>
           </el-menu-item>
+          <el-menu-item index="ai-assistant">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>AI 顾问</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -48,7 +52,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Calendar, List, User, Histogram, Goods } from '@element-plus/icons-vue'
+import { Calendar, List, User, Histogram, Goods, ChatDotRound } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()

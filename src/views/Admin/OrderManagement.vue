@@ -41,6 +41,15 @@
         </template>
       </el-table-column>
 
+      <el-table-column prop="cancelReason" label="取消原因" min-width="150" show-overflow-tooltip>
+        <template #default="scope">
+          <span v-if="scope.row.status === '已取消' && scope.row.cancelReason">
+            {{ scope.row.cancelReason }}
+          </span>
+          <span v-else style="color: #c0c4cc;">-</span>
+        </template>
+      </el-table-column>
+
       <el-table-column prop="workerName" label="负责技师" width="120">
         <template #default="scope">
           <span>{{ scope.row.workerName || '未分配' }}</span>

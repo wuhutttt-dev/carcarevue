@@ -113,6 +113,12 @@ const routes = [
       {
         path: 'service-history',
         component: () => import('../views/User/ServiceHistory.vue')
+      },
+      {
+        path: 'ai-assistant',
+        name: 'AIAssistant',
+        component: () => import('../views/User/AIAssistant.vue'),
+        meta: { title: 'AI 养车顾问' }
       }
     ]
   }
